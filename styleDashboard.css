@@ -1,0 +1,633 @@
+/* =============================================================================== */
+/* SECCIÓN DASHBOARD PARA CASTERS                                                  */
+/* =============================================================================== */
+
+/*  CONTENEDOR SUPERIOR (nombre del mapa, fecha de inicio de partida y botones)  */
+
+.caster-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 95%;
+  max-width: 1100px; /* igual que la tabla */
+  margin: 0 auto 20px auto;
+  padding: 5px 0;
+}
+
+.caster-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 15px;
+}
+
+.caster-map-name {
+  font-family: var(--fuente-principal);
+  font-weight: 700;
+  font-size: 2.0rem;
+  color: var(--color-principal);
+}
+
+.caster-map-date {
+  font-family: var(--fuente-principal);
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--color-secundario);
+  opacity: 0.9;
+}
+
+.caster-header-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+
+
+/* Botones personalizados      */
+.caster-header-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-principal6);  
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-family: var(--fuente-principal);
+  font-size: 0.95rem;
+  cursor: pointer;
+  min-width: 215px; /* mismo ancho para ambos */
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.caster-header-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--color-principal5);
+  border-color: rgba(0, 255, 231, 0.3);
+  transform: translateY(-2px);
+}
+
+.caster-header-btn:active {
+  transform: scale(0.97);
+}
+
+
+
+
+
+/* ---------- TABLA PRINCIPAL DE JUGADORES ---------- */
+/* Tablero flexible, evita width: auto problemáticos */
+.caster-players-table {
+  border-collapse: collapse;
+  margin-top: 10px;
+  width: 100%;
+  max-width: 1100px; /* 🔹 mismo valor */
+  margin-left: auto;
+  margin-right: auto;
+  table-layout: auto; /* 🔹 cambio anterior */
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+
+/* ---------- CELDAS BASE ---------- */
+.caster-players-table th,
+.caster-players-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
+  border: none;
+  color: var(--color-principal6);
+  font-size: 0.9rem;
+  height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+/* ---------- ENCABEZADOS ---------- */
+/* Mantengo estilo pero sin forzar align globalmente */
+.caster-players-table thead tr.compact th {
+  padding: 8px 6px;
+  font-size: 0.95rem;
+  color: var(--color-principal);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+
+
+/* Subtexto dentro del th (Actual / Máx) */
+.caster-players-table thead th .sub {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: rgba(255,255,255,0.7);
+  margin-top: 4px;
+}
+
+/*fondo de los encabezados de la tabla*/
+.caster-players-table thead {
+  background: linear-gradient(90deg, #1b2735, #16163f);
+  color: #f0f0f0;
+}
+
+
+
+
+/* ---------- ALINEACIONES POR CLASE (NO por nth-child) ---------- */
+/* Columna 1 (Team vertical) centrar */
+.caster-players-table .col-team {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Columna 2,3,4 (#, Civ, Jugador) alineadas a la izquierda */
+.caster-players-table .col-num,
+.caster-players-table .col-civ,
+.caster-players-table .col-player {
+  text-align: left;
+  padding-left: 10px;
+}
+
+/* Desde Smurf en adelante: todas las columnas con la clase col-smurf y col-elo centradas */
+.caster-players-table .col-smurf,
+.caster-players-table .col-elo {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Forzar centrado de los contenidos cuando usamos text-center en JS */
+.caster-players-table td.text-center,
+.caster-players-table th.text-center {
+  text-align: center;
+}
+
+/* Estilo del header ELO con título y subtítulo centrados */
+.caster-players-table .elo-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.caster-players-table .elo-title {
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* ---------- COLUMNA EQUIPO (vertical, centrada y angosta) ---------- */
+.team-name-cell {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-weight: 600;
+  color: var(--color-principal2);
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  text-align: center;
+  position: relative;
+  width: 22px;
+  min-width: 22px;
+  max-width: 44px;
+}
+
+
+.team-name-cell .vertical-text {
+  transform: rotate(180deg);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  line-height: 1;
+  font-size: 0.78rem;
+}
+
+/* ---------- COLUMNA COLOR ---------- */
+.player-color-cell { padding-left: 0px; }
+
+.player-color-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-weight: 600;
+  font-size: 0.75rem;
+  box-shadow: 0 0 3px rgba(0,0,0,0.25);
+}
+
+/* ---------- COLUMNA CIVILIZACIÓN ---------- */
+.player-civ-icon {
+  height: 28px;
+  width: auto;
+  border-radius: 4px;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+  margin-right: 0px;
+}
+
+/* ---------- COLUMNA JUGADOR (bandera + nombre) ---------- */
+.player-name-combo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-flag-inline {
+  width: 17px;
+  height: 11px;
+  object-fit: cover;
+}
+
+.player-name-text {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-principal6);
+  line-height: 1.2;
+}
+
+/* Estilos dinámicos Smurf "Sí" */
+.smurf-si {
+  color: var(--color-principal4); /* verde esmeralda */
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 255, 231, 0.05);
+}
+
+.smurf-si:hover {
+  background: rgba(0, 255, 231, 0.15);
+  color: var(--color-principal5); /* turquesa neón */
+  box-shadow: 0 0 8px rgba(0, 255, 231, 0.3);
+  transform: scale(1.05);
+}
+
+
+/* Clan pequeño debajo del nombre */
+.player-clan-small {
+  font-size: 0.6rem;
+  color: rgba(200, 200, 200, 0.6);
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+/* ============================
+   Estilos para columnas ELO combinadas
+   ============================ */
+.col-elo {
+  vertical-align: middle;
+  text-align: center;
+  padding: 6px 8px;
+}
+
+.elo-actual {
+  font-size: 1.1rem; /* igual al tamaño anterior del ELO actual */
+  font-weight: 500;
+  color: #e6e6e6; /* mismo color del texto principal */
+  line-height: 1.2;
+}
+
+.elo-maximo {
+  font-size: 0.65rem; /* igual al tamaño del clan */
+  color: #8fa3b0; /* mismo tono que el clan */
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+/*  Estilos para columnas de Partidas (idéntico a ELO)  */
+.col-partidas {
+  vertical-align: middle;
+  text-align: center;
+  padding: 6px 8px;
+}
+
+/* Total de partidas */
+.partidas-total {
+  font-size: 1.1rem;       /* igual que .elo-actual */
+  font-weight: 500;
+  color: #e6e6e6;
+  line-height: 1.2;
+}
+
+/* Porcentaje de victorias */
+.partidas-ganadas {
+  font-size: 0.65rem;      /* igual que .elo-maximo */
+  color: #8fa3b0;
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+
+
+
+
+
+/* ---------- FILAS Y DIVISORES ---------- */
+/* TR que actúa como divisora */
+.caster-players-table tbody tr.team-divider td {
+  position: relative;      /* necesario para posicionar el pseudo-elemento */
+  padding: 0;              /* ajusta según necesites */
+  height: 22px;            /* si quieres altura mínima del td */
+  /* retiramos border-bottom del td */
+}
+
+/* Dibujamos la línea con un pseudo-elemento y la colocamos 5px por encima del fondo */
+.caster-players-table tbody tr.team-divider td::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px; /* grosor de la línea */
+  background: rgba(22, 92, 109, 0.08); /* color de la línea */
+  bottom: 10px; /* <-- deja 5px debajo de la línea */
+}
+
+
+
+/* ---------- AJUSTES FINALES / FIXES ---------- */
+/* Si hay caso especial con rowspan y quieres que Smurf del primer jugador también esté centrado,
+   el JS ahora coloca explicitamente la clase col-smurf y text-center en todas las celdas Smurf,
+   por lo tanto no necesitas reglas especiales basadas en first-of-type. */
+
+/* Encabezado limpio, sin doble borde */
+.caster-players-table thead tr th {
+  border-bottom: none !important;
+}
+
+
+/* === Ancho fijo para columnas de ELO y Partidas === */
+.caster-players-table .col-elo,
+.caster-players-table .col-partidas {
+  width: 150px !important;  /* 🔹 ancho fijo */
+  min-width: 150px !important;
+  max-width: 150px !important;
+  text-align: center;
+}
+
+
+
+
+
+
+
+
+/* =========================================================================== */
+/* Drawer inferior para cuentas Smurf */
+/* =========================================================================== */
+/* ============================================================
+   PANEL INFERIOR SMURF – Tema Azul Eléctrico (versión fiel al HTML original)
+   ============================================================ */
+
+.smurf-drawer {
+  position: fixed;
+  bottom: -100%;
+  background: linear-gradient(180deg, #00111a, #003366);
+  backdrop-filter: blur(8px);
+  border-top: 2px solid rgba(0, 140, 255, 0.5);
+  box-shadow: 0 -4px 20px rgba(0, 140, 255, 0.3);
+  transition: bottom 0.4s ease;
+  z-index: 2000;
+  max-height: 70vh;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
+  margin: 0 auto;
+  font-family: "Segoe UI", sans-serif;
+  color: #f5f5f5;
+  overflow-x: hidden;
+
+  /* ✅ solo estas son necesarias para tu comportamiento deseado */
+  min-width: 1200px;
+  width: max-content;
+  max-width: none;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.smurf-drawer.open {
+  bottom: 0;
+}
+
+.smurf-drawer-content {
+  padding: 20px;
+}
+
+/* === Encabezado === */
+.smurf-drawer-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.smurf-drawer-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.smurf-drawer-close {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #f5f5f5;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.smurf-drawer-close:hover {
+  color: #00d9ff;
+}
+
+/* === Tabla === */
+.smurf-drawer-table {
+  border-collapse: collapse;
+  margin: 0 auto;
+  /*width: auto;              */
+  text-align: center;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  overflow: hidden;
+
+  width: max-content;        /* se ajusta al contenido */
+  table-layout: auto;        /* permite que crezca según el contenido */
+  white-space: nowrap;       /* evita saltos de línea en celdas */
+  min-width: 1150px;
+}
+
+.smurf-drawer-table th,
+.smurf-drawer-table td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  white-space: nowrap; /* ✅ Ajuste solicitado */
+  font-size: 0.85rem;
+}
+
+/* Encabezados: primera letra en mayúscula ✅ */
+.smurf-drawer-table th {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+  color: #00d9ff;
+  text-transform: capitalize;
+}
+
+.smurf-drawer-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Scrollbar personalizado */
+.smurf-drawer::-webkit-scrollbar {
+  width: 8px;
+}
+.smurf-drawer::-webkit-scrollbar-thumb {
+  background: #0066ff;
+  border-radius: 4px;
+}
+.smurf-drawer::-webkit-scrollbar-thumb:hover {
+  background: #0099ff;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*Adecuaciones varias    ==================================*/
+.hidden {
+  display: none !important;
+}
+
+/*Columna de APM*/
+.col-apm {
+  width: 80px;
+  text-align: center;
+  color: #fff;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+
+/* --- Spinner para columna APM --- */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ccc;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+
+
+
+
+
+
+/* --- Toast global --- */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(30, 30, 30, 0.9);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+/* Celdas con ELO superior a la cuenta base */
+.elo-higher {
+  color: #ff4d4d; /* rojo que combina con la paleta */
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(255, 77, 77, 0.4);
+}
+
+
+
+
+
+
+
+
+
+/* Transición para las columnas */
+.fade-group {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-group.hidden {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  display: none !important; /* 🔹 asegura que la tabla se reajuste sin huecos */
+}
+
+
+
+
+/* ---------- RESPONSIVIDAD ---------- */
+@media (max-width: 1024px) {
+  .caster-players-table {
+    width: 100%;
+    table-layout: auto;
+  }
+
+  .player-name-text {
+    font-size: 0.95rem;
+  }
+
+  .player-clan-small {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+
+  .caster-players-table th,
+  .caster-players-table td {
+    font-size: 0.85rem;
+    padding: 6px 8px;
+    white-space: normal;
+  }
+
+  .player-name-text {
+    font-size: 0.95rem;
+  }
+}
+
+
+/* ============================= */
+/* FIN DE DASHBOARD PARA CASTERS */
+/* ============================= */
