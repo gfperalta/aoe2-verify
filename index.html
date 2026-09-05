@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AoE2Verify</title>
+
+  <!-- Íconos para todas las plataformas -->
+  <link rel="icon" type="image/png" sizes="32x32" href="Img/Logo.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="Img/Logo.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="Img/Logo.png" />
+  <link rel="manifest" href="site.webmanifest" />
+
+  <!-- Hoja de estilos principal -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styleDashboard.css" />
+</head>
+
+<body>
+  <header>
+  <div class="navbar">
+    <div class="inicio-icon">
+      <a href="#" data-section="inicio" title="Volver al inicio">
+        <img src="Img/home.png" alt="Inicio" />
+      </a>
+    </div>
+
+    <div class="logo-wrapper">
+      <div class="logo-section">
+        <img src="Img/logo.png" alt="AoE2Verify" class="logo">
+        <span class="title">AoE2Verify</span>
+      </div>
+    </div>
+
+    <div class="menu-placeholder"></div>
+  </div>
+</header>
+
+
+
+  <main>
+    <div id="content-container">
+      <!-- ========================= -->
+      <!-- Sección INICIO con 3 bloques -->
+      <!-- ========================= -->
+      <section id="inicio" class="content-section active">
+        <div class="hero-text">
+          <span class="hero-highlight">AoE2 Verify</span> permite detectar cuentas Smurf o familiares, extraer masivamente la data de jugadores para torneos y a los Casters les ofrece información consolidada de todos los jugadores de una partida, todo desde un solo lugar.
+        </div>
+
+        <div class="services-container">
+          <!-- Servicio 1 -->
+          <div class="service-card fade-in">
+            <img src="Img/01 Smurf.png" alt="Cuentas Smurf" class="service-img" />
+            <h2>Buscar cuentas Smurf</h2>
+            <p>
+              Descubre si un jugador tiene cuentas smurf, alternas o familiares. AoE2 Verify te mostrará todas las cuentas vinculadas a su perfil principal de forma automática.
+            </p>
+            <button class="card-btn" data-section="smurf">Abrir</button>
+          </div>
+
+          <!-- Servicio 2 -->
+          <div class="service-card fade-in">
+            <img src="Img/02 Listado.png" alt="Herramientas de torneos" class="service-img" />
+            <h2>Extraer data de jugadores</h2>
+            <p>
+              Herramienta para organizadores de torneos que extrae masivamente los ELOS y número de partidas para 1v1 y TG, nacionalidad y clan. ¡Incluso detecta posibles cuentas Smurf!
+            </p>
+            <button class="card-btn" data-section="jugadores">Abrir</button>
+          </div>
+
+          <!-- Servicio 3 -->
+          <div class="service-card fade-in">
+            <img src="Img/03 Caster.png" alt="Herramientas para casters" class="service-img" />
+            <h2>Dashboard para casters</h2>
+            <p>
+              Analiza los jugadores de una partida: sus elos, estadísticas, mapas y civilizaciones preferidas, además de las probabilidades de victoria. Todo lo que un caster necesita.
+            </p>
+            <button class="card-btn" data-section="casterBuscar">Abrir</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================= -->
+      <!-- Secciones originales intactas -->
+      <!-- ========================= -->
+      <section id="smurf" class="content-section">
+        <h1>Buscar cuentas smurf</h1>
+        <p>Aquí podrás detectar posibles cuentas alternas y comparar perfiles.</p>
+      </section>
+
+      <section id="jugadores" class="content-section">
+        <h1>Consulta de jugadores</h1>
+        <p>Busca jugadores por nombre o ID para ver sus estadísticas y actividad reciente.</p>
+      </section>
+
+      <section id="casterBuscar" class="content-section">
+        <h1>🔧 Estamos trabajando en la busqueda de jugadores</h1>
+        <p>Esto es la busqueda</p>
+      </section>
+
+      <section id="caster" class="content-section">
+        <h1>🔧 Estamos trabajando en esta funcionalidad de Caster</h1>
+        <p>La sección de información para casters estará disponible muy pronto. 
+        ¡Estamos ultimando detalles para llevarte una herramienta increíble!</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="scriptPpal.js"></script>
+  <script src="scriptInicio.js"></script>
+  <script src="scriptSmurf.js"></script>
+  <script src="scriptValidacion.js"></script>
+  <script src="scriptCasterBuscar.js"></script>
+  <script src="scriptCaster.js"></script>
+
+
+<!-- Pantalla de carga para "Ver Dashboard" -->
+<div id="loader-screen" class="loader-screen">
+  <div class="loader-content">
+    <div class="spinner"></div>
+    <p>Cargando información de la partida…</p>
+  </div>
+</div>
+
+</body>
+</html>
