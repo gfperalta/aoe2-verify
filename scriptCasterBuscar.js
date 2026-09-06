@@ -103,7 +103,82 @@ function initCasterBuscarSection() {
   casterInput.focus();
   casterInput.select();
 
-  casterInput.addEventListener("focus", () => casterInput.select());
+  casterInput.addEventListener("focus", () => {
+    casterInput.select();
+    // 🔹 Si el campo está vacío, mostrar las últimas búsquedas
+    if (!casterInput.value.trim()) {
+      renderBusquedasRecientes();
+    }
+  });
+
+  // 🔹 Mostrar las últimas búsquedas apenas se entra a la pantalla
+  renderBusquedasRecientes();
+}
+
+// =============================
+// Búsquedas recientes (se guardan en el navegador)
+// =============================
+const RECENT_SEARCHES_KEY = "aoe2verify_casterRecentSearches";
+const MAX_RECENT_SEARCHES = 5;
+
+function obtenerBusquedasRecientes() {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    const lista = raw ? JSON.parse(raw) : [];
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    return [];
+  }
+}
+
+function guardarBusquedaReciente(profileId, playerName) {
+  if (!profileId || !playerName) return;
+  try {
+    let recientes = obtenerBusquedasRecientes();
+    // Quitar si ya estaba (para subirlo al tope, sin duplicarlo)
+    recientes = recientes.filter((r) => r.profileId !== profileId);
+    recientes.unshift({ profileId, name: playerName });
+    recientes = recientes.slice(0, MAX_RECENT_SEARCHES);
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recientes));
+  } catch (e) {
+    console.error("No se pudo guardar la búsqueda reciente:", e);
+  }
+}
+
+function renderBusquedasRecientes() {
+  if (!casterResults) return;
+
+  const recientes = obtenerBusquedasRecientes();
+  if (!recientes.length) {
+    casterResults.innerHTML = "";
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+
+  const label = document.createElement("div");
+  label.className = "recent-searches-label";
+  label.textContent = "Búsquedas recientes";
+  frag.appendChild(label);
+
+  recientes.forEach((r) => {
+    const row = document.createElement("div");
+    row.className = "search-row";
+    row.innerHTML = `
+      <div class="sr-left">
+        <div class="sr-name">${escapeHtml(r.name)}</div>
+        <div class="sr-meta">Búsqueda reciente</div>
+      </div>
+      <div class="sr-right">ID: ${r.profileId}</div>
+    `;
+    row.addEventListener("click", () =>
+      seleccionarJugadorCaster(r.profileId, r.name)
+    );
+    frag.appendChild(row);
+  });
+
+  casterResults.innerHTML = "";
+  casterResults.appendChild(frag);
 }
 
 // =============================
@@ -117,7 +192,12 @@ function handleCasterInput(e) {
 }
 
 async function buscarJugadoresCaster(query) {
-  if (!query || query.length < 3) {
+  if (!query) {
+    // 🔹 Campo vacío: volver a mostrar las últimas búsquedas
+    renderBusquedasRecientes();
+    return;
+  }
+  if (query.length < 3) {
     casterResults.innerHTML = `<div class="hint">Escribe 3 o más caracteres para buscar.</div>`;
     return;
   }
@@ -177,6 +257,9 @@ function seleccionarJugadorCaster(profileId, playerName) {
   // 🔹 Guardamos esta búsqueda como "la última", para poder restaurarla
   // si el usuario vuelve desde el dashboard.
   lastCasterSearch = { profileId, playerName };
+
+  // 🔹 También la guardamos en el historial de búsquedas recientes
+  guardarBusquedaReciente(profileId, playerName);
 
   selectedCasterProfileId = profileId;
   casterInput.value = playerName;
