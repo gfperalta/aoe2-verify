@@ -278,7 +278,7 @@
 
 /* Variante: cuenta smurf con ELO 1v1 superior al de la cuenta actual */
 .smurf-si.smurf-alerta {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
