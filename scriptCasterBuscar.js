@@ -303,8 +303,11 @@ async function obtenerPartidasCaster(profileId) {
   casterContainer.innerHTML = `<div class="hint">Buscando partidas... <span class="loader-circle"></span></div>`;
   casterContainer.style.display = "block"; // aseguramos que el contenedor esté visible
   try {
-    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es`;
-    const res = await fetch(url);
+    // 🔹 "_" es un parámetro anti-caché: el endpoint se sirve detrás de Cloudflare
+    // con s-maxage=3600, así que sin esto se puede recibir una respuesta cacheada
+    // de hasta 1 hora de antigüedad en vez de las partidas más recientes.
+    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
     currentMatches = data.matches || [];
     currentPage = 0;
@@ -691,8 +694,9 @@ function startCountdownAnimation(seconds, countdownText, indicator) {
 async function checkForUpdates() {
   if (!selectedCasterProfileId) return;
   try {
-    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${selectedCasterProfileId}&search=&leaderboard_ids=&page=1&language=es`;
-    const res = await fetch(url);
+    // 🔹 Anti-caché: ver nota en obtenerPartidasCaster().
+    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${selectedCasterProfileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
     const matches = data.matches || [];
 
