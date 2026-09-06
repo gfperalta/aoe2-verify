@@ -299,6 +299,8 @@ setTimeout(() => {
 // =============================
 // Obtener partidas del jugador
 // =============================
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function obtenerPartidasCaster(profileId) {
   if (!profileId) return;
 
@@ -310,40 +312,64 @@ async function obtenerPartidasCaster(profileId) {
   // jugador antes de que esta responda, ese segundo llamado le asigna un
   // número más alto a obtenerPartidasRequestId — y cuando esta respuesta
   // (la vieja) llegue, la descartamos en vez de pisar lo que ya se ve en
-  // pantalla. Este es el bug que reportaste: sin esto, si la búsqueda del
-  // primer jugador tardaba más que la del segundo (por ejemplo por un
-  // límite de peticiones de la API), su respuesta llegaba después y dejaba
-  // el botón "Ver dashboard" sin partidas / inactivo para el jugador
-  // equivocado.
+  // pantalla.
   const miRequestId = ++obtenerPartidasRequestId;
 
   casterContainer.innerHTML = `<div class="hint">Buscando partidas... <span class="loader-circle"></span></div>`;
   casterContainer.style.display = "block"; // aseguramos que el contenedor esté visible
-  try {
-    // 🔹 "_" es un parámetro anti-caché: el endpoint se sirve detrás de Cloudflare
-    // con s-maxage=3600, así que sin esto se puede recibir una respuesta cacheada
-    // de hasta 1 hora de antigüedad en vez de las partidas más recientes.
-    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
-    const res = await fetch(url, { cache: "no-store" });
 
-    if (miRequestId !== obtenerPartidasRequestId) return; // ya hay una búsqueda más nueva en curso
+  // 🔹 La API pública de AoE2 Companion tiene un límite de peticiones bajo
+  // (la vimos rechazar con 429 varias veces solo en esta sesión). Antes,
+  // un solo 429 dejaba al jugador sin partidas y sin botón "Ver dashboard",
+  // sin ninguna forma de recuperarse sola — eso es lo que seguías viendo.
+  // Ahora, si la API responde 429 (u otro error de servidor 5xx), esperamos
+  // un poco y reintentamos, hasta 4 veces, respetando el header
+  // "Retry-After" cuando la API lo manda.
+  const MAX_INTENTOS = 4;
 
-    if (!res.ok) {
-      // p. ej. 429 (límite de peticiones de la API pública): no hay que
-      // interpretar esto como "el jugador no tiene partidas".
-      casterContainer.innerHTML = `<div class="hint error">La API de AoE2 Companion no respondió (código ${res.status}). Intenta de nuevo en unos segundos.</div>`;
-      return;
+  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+    try {
+      // 🔹 "_" es un parámetro anti-caché: el endpoint se sirve detrás de
+      // Cloudflare con s-maxage=3600, así que sin esto se puede recibir una
+      // respuesta cacheada de hasta 1 hora en vez de las partidas más recientes.
+      const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
+      const res = await fetch(url, { cache: "no-store" });
+
+      if (miRequestId !== obtenerPartidasRequestId) return; // ya hay una búsqueda más nueva en curso
+
+      const esErrorTemporal = res.status === 429 || res.status >= 500;
+      if (esErrorTemporal && intento < MAX_INTENTOS) {
+        const retryAfter = Number(res.headers.get("Retry-After"));
+        const espera = (!isNaN(retryAfter) && retryAfter > 0) ? retryAfter * 1000 : intento * 1500;
+        casterContainer.innerHTML = `<div class="hint">La API está ocupada, reintentando (${intento}/${MAX_INTENTOS - 1})... <span class="loader-circle"></span></div>`;
+        await sleep(espera);
+        if (miRequestId !== obtenerPartidasRequestId) return;
+        continue; // siguiente intento
+      }
+
+      if (!res.ok) {
+        // Se agotaron los reintentos, o es un error que no tiene sentido
+        // reintentar (4xx distinto de 429): no lo confundimos con "el
+        // jugador no tiene partidas".
+        casterContainer.innerHTML = `<div class="hint error">La API de AoE2 Companion no respondió (código ${res.status}). Intenta de nuevo en unos segundos.</div>`;
+        return;
+      }
+
+      const data = await res.json();
+      if (miRequestId !== obtenerPartidasRequestId) return; // descartar si ya quedó vieja
+
+      currentMatches = data.matches || [];
+      currentPage = 0;
+      renderCasterMatch();
+      return; // éxito
+    } catch (e) {
+      if (miRequestId !== obtenerPartidasRequestId) return;
+      if (intento >= MAX_INTENTOS) {
+        casterContainer.innerHTML = `<div class="hint error">Error al obtener partidas.</div>`;
+        return;
+      }
+      await sleep(intento * 1500);
     }
-
-    const data = await res.json();
-    if (miRequestId !== obtenerPartidasRequestId) return; // descartar si ya quedó vieja
-
-    currentMatches = data.matches || [];
-    currentPage = 0;
-    renderCasterMatch();
-  } catch (e) {
-    if (miRequestId !== obtenerPartidasRequestId) return;
-    casterContainer.innerHTML = `<div class="hint error">Error al obtener partidas.</div>`;
   }
 }
 
