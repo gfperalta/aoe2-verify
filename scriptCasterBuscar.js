@@ -13,6 +13,12 @@ let monitorInterval = null;
 let monitorActive = false;
 let monitorDelay = 10;
 
+// 🔹 Ficha de la última petición de partidas lanzada (ver obtenerPartidasCaster).
+// Sirve para descartar una respuesta que llega tarde y "atrasada": si el
+// usuario busca un jugador y luego, antes de que responda, busca otro, la
+// respuesta del primero no debe pisar lo que ya se está mostrando del segundo.
+let obtenerPartidasRequestId = 0;
+
 // 🔹 Recuerda la última búsqueda (jugador) para poder restaurarla al volver
 // desde el dashboard con el botón "Volver". No se limpia al destruir la sección.
 let lastCasterSearch = null;
@@ -300,6 +306,17 @@ async function obtenerPartidasCaster(profileId) {
   // pero no tocamos la UI ni ocultamos el contenedor.
   stopAutoMonitorTimers();
 
+  // 🔹 Marcamos esta petición como "la vigente". Si el usuario busca otro
+  // jugador antes de que esta responda, ese segundo llamado le asigna un
+  // número más alto a obtenerPartidasRequestId — y cuando esta respuesta
+  // (la vieja) llegue, la descartamos en vez de pisar lo que ya se ve en
+  // pantalla. Este es el bug que reportaste: sin esto, si la búsqueda del
+  // primer jugador tardaba más que la del segundo (por ejemplo por un
+  // límite de peticiones de la API), su respuesta llegaba después y dejaba
+  // el botón "Ver dashboard" sin partidas / inactivo para el jugador
+  // equivocado.
+  const miRequestId = ++obtenerPartidasRequestId;
+
   casterContainer.innerHTML = `<div class="hint">Buscando partidas... <span class="loader-circle"></span></div>`;
   casterContainer.style.display = "block"; // aseguramos que el contenedor esté visible
   try {
@@ -308,11 +325,24 @@ async function obtenerPartidasCaster(profileId) {
     // de hasta 1 hora de antigüedad en vez de las partidas más recientes.
     const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
     const res = await fetch(url, { cache: "no-store" });
+
+    if (miRequestId !== obtenerPartidasRequestId) return; // ya hay una búsqueda más nueva en curso
+
+    if (!res.ok) {
+      // p. ej. 429 (límite de peticiones de la API pública): no hay que
+      // interpretar esto como "el jugador no tiene partidas".
+      casterContainer.innerHTML = `<div class="hint error">La API de AoE2 Companion no respondió (código ${res.status}). Intenta de nuevo en unos segundos.</div>`;
+      return;
+    }
+
     const data = await res.json();
+    if (miRequestId !== obtenerPartidasRequestId) return; // descartar si ya quedó vieja
+
     currentMatches = data.matches || [];
     currentPage = 0;
     renderCasterMatch();
   } catch (e) {
+    if (miRequestId !== obtenerPartidasRequestId) return;
     casterContainer.innerHTML = `<div class="hint error">Error al obtener partidas.</div>`;
   }
 }
