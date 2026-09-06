@@ -4,6 +4,48 @@
 
 let dashboardData = null;
 
+// 🔹 Monitoreo automático: revisa cada 10s si hay una partida más reciente
+// para el jugador que se está viendo, y si la hay, actualiza el dashboard.
+let dashboardMonitorInterval = null;
+let dashboardMonitorBusy = false;
+
+// Referencias a los listeners del drawer de Smurfs, para poder quitarlos
+// antes de volver a registrarlos cada vez que se (re)inicializa la sección.
+let sectionChangeDrawerListener = null;
+let outsideClickDrawerListener = null;
+
+// ==================================================
+// Analizar las cuentas Smurf de un jugador
+// ==================================================
+// Recibe la entrada de `dashboardData.Smurf` correspondiente a un jugador
+// (con su arreglo `cuentas`, donde cuentas[0] es la cuenta con la que está
+// jugando actualmente y el resto son sus cuentas smurf/alternas).
+// Devuelve null si no tiene cuentas smurf, o un objeto con:
+//   - totalSmurfs: cantidad de cuentas smurf (sin contar la que está jugando)
+//   - cuentaSuperior: la cuenta smurf con mayor ELO 1v1, solo si supera al
+//     ELO 1v1 de la cuenta actual (si ninguna lo supera, es null)
+function analizarCuentasSmurf(smurfData) {
+  if (!smurfData || !Array.isArray(smurfData.cuentas) || smurfData.cuentas.length <= 1) {
+    return null;
+  }
+
+  const [cuentaActual, ...cuentasSmurf] = smurfData.cuentas;
+  const eloActual = Number(cuentaActual?.elo1v1) || 0;
+
+  let cuentaSuperior = null;
+  for (const cuenta of cuentasSmurf) {
+    const elo = Number(cuenta?.elo1v1) || 0;
+    if (elo > eloActual && (!cuentaSuperior || elo > (Number(cuentaSuperior.elo1v1) || 0))) {
+      cuentaSuperior = cuenta;
+    }
+  }
+
+  return {
+    totalSmurfs: cuentasSmurf.length,
+    cuentaSuperior,
+  };
+}
+
 // ==================================================
 // Inicializar la sección principal del dashboard
 // ==================================================
@@ -34,6 +76,7 @@ function initCasterSection() {
           </div>
 
           <div class="caster-header-right">
+            <button class="caster-header-btn btn-volver-busqueda" type="button">← Volver a la búsqueda</button>
             <button class="caster-header-btn btn-ver-partidas" type="button">Ver partidas</button>
             <button class="caster-header-btn btn-probabilidades" type="button">Probabilidades de victoria</button>
           </div>
@@ -188,14 +231,40 @@ function initCasterSection() {
       const tdSmurf = document.createElement("td");
       tdSmurf.className = "col-smurf text-center";
       const smurfData = (dashboardData.Smurf || []).find(s => s.jugadorId === p.profileId);
+      const analisisSmurf = analizarCuentasSmurf(smurfData);
 
-      if (smurfData && Array.isArray(smurfData.cuentas) && smurfData.cuentas.length > 1) {
+      if (analisisSmurf) {
         const span = document.createElement("span");
         span.className = "smurf-si";
-        span.textContent = "Sí";
         span.title = "Ver cuentas relacionadas";
+
+        // 🔹 Si alguna cuenta smurf tiene un ELO 1v1 superior al de la cuenta
+        // con la que está jugando, mostramos su nombre + ELO (y el total de
+        // cuentas smurf entre paréntesis). Si no, mostramos simplemente "Sí".
+        let textoParaCopiar = null;
+        if (analisisSmurf.cuentaSuperior) {
+          const nombreCuenta = analisisSmurf.cuentaSuperior.nombre || "Desconocido";
+          const eloCuenta = analisisSmurf.cuentaSuperior.elo1v1 ?? 0;
+          span.classList.add("smurf-alerta");
+          span.innerHTML = `
+            <span class="smurf-alerta-nombre">${escapeHtml(nombreCuenta)}</span>
+            <span class="smurf-alerta-elo">${escapeHtml(eloCuenta)} (${analisisSmurf.totalSmurfs})</span>
+          `;
+          const textoTotalSmurfs = analisisSmurf.totalSmurfs === 1 ? "cuenta smurf" : "cuentas smurf";
+          textoParaCopiar = `${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
+        } else {
+          span.textContent = "Sí";
+        }
+
         span.addEventListener("click", (e) => {
           e.stopPropagation();
+
+          // 🔹 Copiar al portapapeles el nombre y ELO de la cuenta smurf detectada
+          if (textoParaCopiar) {
+            navigator.clipboard.writeText(textoParaCopiar).catch(err =>
+              console.error("Error al copiar:", err)
+            );
+          }
 
           // Obtener el panel y elementos internos
           const drawer = document.querySelector(".smurf-drawer");
@@ -496,8 +565,18 @@ function initCasterSection() {
 
   // ---- Listeners para los botones del encabezado ----
   // ---- Listeners para los botones del encabezado ----
+  const btnVolverBusqueda = casterSection.querySelector(".btn-volver-busqueda");
   const btnVerPartidas = casterSection.querySelector(".btn-ver-partidas");
   const btnProbabilidades = casterSection.querySelector(".btn-probabilidades");
+
+  // Volver a la pantalla de búsqueda, restaurando el último jugador buscado
+  if (btnVolverBusqueda) {
+    btnVolverBusqueda.addEventListener("click", (e) => {
+      e.stopPropagation();
+      window.__regresarCasterBuscar = true; // le indica a scriptCasterBuscar.js que restaure la búsqueda
+      mostrarSeccion("casterBuscar");
+    });
+  }
 
   // Toggle único: Ver partidas <-> Ver ELO
   if (btnVerPartidas) {
@@ -550,21 +629,33 @@ function initCasterSection() {
 
 
   // 🔹 Cierre automático del drawer
+  // (quitamos los listeners de la vez anterior antes de crear los nuevos,
+  // ya que initCasterSection() ahora puede volver a ejecutarse cuando el
+  // monitoreo automático detecta una partida más reciente)
+  if (sectionChangeDrawerListener) {
+    document.removeEventListener("sectionChange", sectionChangeDrawerListener);
+  }
+  if (outsideClickDrawerListener) {
+    document.removeEventListener("click", outsideClickDrawerListener);
+  }
+
   // 1️⃣ Si el usuario cambia de sección
-  document.addEventListener("sectionChange", (e) => {
+  sectionChangeDrawerListener = (e) => {
     if (e.detail !== "caster") {
       drawer.classList.remove("open");
     }
-  });
+  };
+  document.addEventListener("sectionChange", sectionChangeDrawerListener);
 
   // 2️⃣ Si el usuario hace clic fuera del área del drawer
-  document.addEventListener("click", (event) => {
+  outsideClickDrawerListener = (event) => {
     const isClickInsideDrawer = drawer.contains(event.target);
     const isClickOnSmurfButton = event.target.closest(".smurf-si");
     if (!isClickInsideDrawer && !isClickOnSmurfButton) {
       drawer.classList.remove("open");
     }
-  });
+  };
+  document.addEventListener("click", outsideClickDrawerListener);
 
   // 3️⃣ Si el contenedor principal del caster pierde el foco
   //const casterSection = document.getElementById("caster");
@@ -579,7 +670,8 @@ function initCasterSection() {
     });
   }
 
-
+  // 🔹 Iniciar el monitoreo automático de nuevas partidas para este dashboard
+  iniciarMonitoreoDashboard();
 }
 
 
@@ -640,10 +732,88 @@ function mostrarToast(mensaje, duracion = 4000) {
 
 
 // =============================
+// Monitoreo automático de partidas más recientes
+// =============================
+
+// Inicia (o reinicia) el chequeo periódico cada 10 segundos.
+function iniciarMonitoreoDashboard() {
+  detenerMonitoreoDashboard(); // evita duplicar intervalos
+
+  const profileId = obtenerProfileIdMonitoreado();
+  if (!profileId) return;
+
+  dashboardMonitorInterval = setInterval(() => {
+    verificarPartidaMasReciente(profileId);
+  }, 10000);
+}
+
+function detenerMonitoreoDashboard() {
+  if (dashboardMonitorInterval) {
+    clearInterval(dashboardMonitorInterval);
+    dashboardMonitorInterval = null;
+  }
+  dashboardMonitorBusy = false;
+}
+
+// Determina de qué jugador debemos vigilar sus próximas partidas:
+// preferimos el último jugador buscado (definido en scriptCasterBuscar.js);
+// si no está disponible, usamos el primer jugador de la partida actual.
+function obtenerProfileIdMonitoreado() {
+  if (typeof lastCasterSearch !== "undefined" && lastCasterSearch?.profileId) {
+    return lastCasterSearch.profileId;
+  }
+  const teams = dashboardData?.teams || [];
+  for (const team of teams) {
+    const pid = team?.players?.[0]?.profileId;
+    if (pid) return pid;
+  }
+  return null;
+}
+
+async function verificarPartidaMasReciente(profileId) {
+  if (dashboardMonitorBusy || !dashboardData) return;
+  dashboardMonitorBusy = true;
+
+  try {
+    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${profileId}&search=&leaderboard_ids=&page=1&language=es`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const matches = data.matches || [];
+    if (!matches.length) return;
+
+    const ultimaPartidaVista = dashboardData;
+    const partidaMasReciente = matches[0];
+
+    // ¿Es realmente una partida distinta a la que estamos viendo?
+    if (partidaMasReciente.matchId === ultimaPartidaVista.matchId) return;
+
+    if ((partidaMasReciente.teams || []).length > 2) {
+      console.warn("⚠️ Se detectó una partida más reciente con más de 2 equipos; no se actualiza el dashboard automáticamente.");
+      return;
+    }
+
+    mostrarToast("🔄 Se encontró una partida más reciente, actualizando dashboard...", 4000);
+
+    const matchCompleto = await construirDatosCompletosPartida(partidaMasReciente);
+
+    window.dashboardData = matchCompleto;
+    sessionStorage.setItem("dashboardData", JSON.stringify(matchCompleto));
+
+    // 🔹 Re-renderizamos el dashboard en el lugar, sin cambiar de sección
+    initCasterSection();
+  } catch (err) {
+    console.error("Error verificando partida más reciente en el dashboard:", err);
+  } finally {
+    dashboardMonitorBusy = false;
+  }
+}
+
+// =============================
 // Destruir sección
 // =============================
 function destroyCasterSection() {
   console.log("🚪 Se salió de la sección Caster");
+  detenerMonitoreoDashboard();
   dashboardData = null;
   const casterSection = document.getElementById("caster");
   if (casterSection) casterSection.innerHTML = "";

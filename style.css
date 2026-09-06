@@ -194,6 +194,7 @@ header {
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   position: relative;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .service-card:hover {
@@ -468,6 +469,8 @@ header {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+
 
 
 
@@ -823,6 +826,7 @@ header {
     transform: rotate(360deg);
   }
 }
+
 
 
 
@@ -1403,6 +1407,7 @@ header {
 /* ============================= */
 /* FIN SECCION PARA CASTER */
 /* ============================= */
+
 
 
 

@@ -13,6 +13,10 @@ let monitorInterval = null;
 let monitorActive = false;
 let monitorDelay = 10;
 
+// 🔹 Recuerda la última búsqueda (jugador) para poder restaurarla al volver
+// desde el dashboard con el botón "Volver". No se limpia al destruir la sección.
+let lastCasterSearch = null;
+
 // =============================
 // Inicializar la sección
 // =============================
@@ -170,6 +174,10 @@ function renderCasterSearchResults(profiles) {
 function seleccionarJugadorCaster(profileId, playerName) {
   stopAutoMonitorVisual(); // 🟢 Detiene el monitoreo visual y timers previos
 
+  // 🔹 Guardamos esta búsqueda como "la última", para poder restaurarla
+  // si el usuario vuelve desde el dashboard.
+  lastCasterSearch = { profileId, playerName };
+
   selectedCasterProfileId = profileId;
   casterInput.value = playerName;
   casterResults.innerHTML = "";
@@ -223,6 +231,125 @@ async function obtenerPartidasCaster(profileId) {
   }
 }
 
+
+// =============================
+// Construir datos completos de una partida (jugadores reales + cuentas Smurf)
+// Reutilizable tanto por el botón "Ver dashboard" como por el monitoreo
+// automático del propio dashboard (ver scriptCaster.js).
+// =============================
+async function construirDatosCompletosPartida(match) {
+  if (!match?.teams || !Array.isArray(match.teams)) {
+    throw new Error("La partida no tiene equipos o jugadores válidos.");
+  }
+
+  const jugadoresReales = [];
+
+  // 1️⃣ Obtener jugadores reales
+  for (const team of match.teams) {
+    if (!team?.players) continue;
+
+    for (const player of team.players) {
+      const profileId = player?.profileId;
+      if (!profileId) continue;
+
+      const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(
+        profileId
+      )}?language=es&extend=stats%2Cprofiles.avatar_medium_url%2Cprofiles.avatar_full_url&page=1`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        jugadoresReales.push(data);
+      } catch (err) {
+        console.error("Error obteniendo jugador real:", profileId, err);
+      }
+    }
+  }
+
+  // 2️⃣ Obtener cuentas Smurf (en paralelo)
+  async function obtenerSmurfsParaJugador(profileId) {
+    const matriz = [];
+    const visitados = new Set();
+
+    async function obtenerData(pid) {
+      const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(pid)}?language=es&extend=stats&page=1`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("No encontrado");
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    async function procesarCuenta(pid, padre = null) {
+      pid = String(pid).trim();
+      if (!pid || visitados.has(pid)) return;
+      visitados.add(pid);
+
+      const dataCuenta = await obtenerData(pid);
+      if (!dataCuenta) return;
+
+      const lb1v1 = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_1v1") || {};
+      const lbTG = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_team") || {};
+
+      const fila = {
+        n: matriz.length + 1,
+        padre: padre || dataCuenta.name || "Principal",
+        nombre: dataCuenta.name || "Desconocido",
+        pais: dataCuenta.countryName || "",
+        id: pid,
+        elo1v1: lb1v1.rating ?? 0,
+        max1v1: lb1v1.maxRating ?? 0,
+        juegos1v1: lb1v1.games ?? 0,
+        eloTG: lbTG.rating ?? 0,
+        maxTG: lbTG.maxRating ?? 0,
+        juegosTG: lbTG.games ?? 0,
+      };
+
+      matriz.push(fila);
+
+      const linkedProfiles = dataCuenta.linkedProfiles || dataCuenta.params?.linkedProfiles || [];
+      if (Array.isArray(linkedProfiles) && linkedProfiles.length > 0) {
+        for (const linked of linkedProfiles) {
+          const hijoId = linked?.profileId ?? linked?.id ?? null;
+          if (hijoId) await procesarCuenta(hijoId, dataCuenta.name);
+        }
+      }
+    }
+
+    await procesarCuenta(profileId);
+    return matriz;
+  }
+
+  const smurfPromises = [];
+  for (const team of match.teams) {
+    if (!team?.players) continue;
+
+    for (const player of team.players) {
+      const pid = player?.profileId;
+      if (!pid) continue;
+
+      smurfPromises.push(
+        obtenerSmurfsParaJugador(pid).then(cuentas => ({
+          jugadorId: pid,
+          cuentas
+        }))
+      );
+    }
+  }
+
+  const smurfData = await Promise.all(smurfPromises);
+
+  // 3️⃣ Guardar en el objeto match
+  match.jugadoresReales = jugadoresReales;
+  match.Smurf = smurfData;
+
+  console.log("✅ jugadoresReales:", jugadoresReales);
+  console.log("✅ Smurf:", smurfData);
+
+  return match;
+}
 
 // =============================
 // Render una partida con paginación
@@ -324,166 +451,24 @@ const team2Box = createTeamBox("Equipo 2", team2, winnerTeam === "team2");
   //ventana de carga con spiner
   document.getElementById("loader-screen").classList.add("active");
 
-    // ==============================================
-  // 🔹 Nueva lógica: Jugadores reales + Smurfs (optimizada)
-  // ==============================================
   (async () => {
     try {
-      const jugadoresReales = [];
-      let smurfData = [];
+      const matchCompleto = await construirDatosCompletosPartida(match);
 
-      if (match?.teams && Array.isArray(match.teams)) {
-        // ==============================
-        // 1️⃣ Obtener jugadores reales
-        // ==============================
-        for (const team of match.teams) {
-          if (!team?.players) continue;
+      //Se oculta la ventana de cargando
+      document.getElementById("loader-screen").classList.remove("active");
 
-          for (const player of team.players) {
-            const profileId = player?.profileId;
-            if (!profileId) continue;
+      // 🔹 Guardamos el match completo (con jugadoresReales y Smurf) en memoria global
+      window.dashboardData = matchCompleto;
 
-            const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(
-              profileId
-            )}?language=es&extend=stats%2Cprofiles.avatar_medium_url%2Cprofiles.avatar_full_url&page=1`;
+      // 🔹 También lo guardamos en sessionStorage por si recargas la página
+      sessionStorage.setItem("dashboardData", JSON.stringify(matchCompleto));
 
-            try {
-              const res = await fetch(url);
-              const data = await res.json();
-              jugadoresReales.push(data);
-            } catch (err) {
-              console.error("Error obteniendo jugador real:", profileId, err);
-            }
-          }
-        }
-
-        // ==============================
-        // 2️⃣ Obtener cuentas Smurf (ahora en paralelo)
-        // ==============================
-        async function obtenerSmurfsParaJugador(profileId) {
-          const matriz = [];
-          const visitados = new Set();
-
-          async function obtenerData(pid) {
-            const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(pid)}?language=es&extend=stats&page=1`;
-            try {
-              const res = await fetch(url);
-              if (!res.ok) throw new Error("No encontrado");
-              return await res.json();
-            } catch {
-              return null;
-            }
-          }
-
-          async function procesarCuenta(pid, padre = null) {
-            pid = String(pid).trim();
-            if (!pid || visitados.has(pid)) return;
-            visitados.add(pid);
-
-            const dataCuenta = await obtenerData(pid);
-            if (!dataCuenta) return;
-
-            const lb1v1 = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_1v1") || {};
-            const lbTG = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_team") || {};
-
-            const fila = {
-              n: matriz.length + 1,
-              padre: padre || dataCuenta.name || "Principal",
-              nombre: dataCuenta.name || "Desconocido",
-              pais: dataCuenta.countryName || "",
-              id: pid,
-              elo1v1: lb1v1.rating ?? 0,
-              max1v1: lb1v1.maxRating ?? 0,
-              juegos1v1: lb1v1.games ?? 0,
-              eloTG: lbTG.rating ?? 0,
-              maxTG: lbTG.maxRating ?? 0,
-              juegosTG: lbTG.games ?? 0,
-            };
-
-            matriz.push(fila);
-
-            const linkedProfiles = dataCuenta.linkedProfiles || dataCuenta.params?.linkedProfiles || [];
-            if (Array.isArray(linkedProfiles) && linkedProfiles.length > 0) {
-              for (const linked of linkedProfiles) {
-                const hijoId = linked?.profileId ?? linked?.id ?? null;
-                if (hijoId) await procesarCuenta(hijoId, dataCuenta.name);
-              }
-            }
-          }
-
-          await procesarCuenta(profileId);
-          return matriz;
-        }
-
-        // 🔹 Ejecutar las búsquedas Smurf en paralelo
-        const smurfPromises = [];
-
-        for (const team of match.teams) {
-          if (!team?.players) continue;
-
-          for (const player of team.players) {
-            const pid = player?.profileId;
-            if (!pid) continue;
-
-            smurfPromises.push(
-              obtenerSmurfsParaJugador(pid).then(cuentas => ({
-                jugadorId: pid,
-                cuentas
-              }))
-            );
-          }
-        }
-
-        smurfData = await Promise.all(smurfPromises);
-
-
-        
-
-        // ==============================
-        // 3️⃣ Guardar en el objeto match
-        // ==============================
-        match.jugadoresReales = jugadoresReales;
-        match.Smurf = smurfData;
-
-        console.log("✅ jugadoresReales:", jugadoresReales);
-        console.log("✅ Smurf:", smurfData);
-
-        //Se oculta la ventana de cargando
-        document.getElementById("loader-screen").classList.remove("active");
-
-        // ==============================
-        // 4️⃣ Guardar el arreglo y abrir la nueva sección
-        // ==============================
-
-        // 🔹 Guardamos el match completo (con jugadoresReales y Smurf) en memoria global
-        window.dashboardData = match;
-
-        // 🔹 También puedes guardarlo en sessionStorage por si recargas la página
-        sessionStorage.setItem("dashboardData", JSON.stringify(match));
-
-        // 🔹 Disparamos el cambio de sección hacia "caster"
-        document.dispatchEvent(new CustomEvent("sectionChange", { detail: "caster" }));
-
-        // ==============================
-        // 4️⃣ Descargar JSON final
-        // ==============================
-        /*const dataStr = JSON.stringify(match, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `partida_${match.matchId || "sin_id"}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);*/
-
-      } else {
-        alert("⚠️ No se encontraron equipos o jugadores en la partida.");
-      }
+      // 🔹 Disparamos el cambio de sección hacia "caster"
+      document.dispatchEvent(new CustomEvent("sectionChange", { detail: "caster" }));
     } catch (err) {
       console.error("Error general al obtener datos de jugadores reales y smurfs:", err);
+      document.getElementById("loader-screen").classList.remove("active");
       alert("❌ Error al obtener los datos.");
     }
   })();
@@ -731,13 +716,11 @@ document.addEventListener("sectionChange", (e) => {
   if (e.detail === "casterBuscar") {
     initCasterBuscarSection();
 
-    // 🔹 Si ya hay un jugador seleccionado, activar automáticamente el monitoreo
-    if (selectedCasterProfileId) {
-      const check = document.getElementById("autoMonitorCheck");
-      if (check) {
-        check.checked = true;
-        check.dispatchEvent(new Event("change")); // simula clic real
-      }
+    // 🔹 Si venimos del botón "Volver" del dashboard, restauramos automáticamente
+    // la última búsqueda (jugador) en vez de empezar desde cero.
+    if (window.__regresarCasterBuscar && lastCasterSearch) {
+      window.__regresarCasterBuscar = false;
+      seleccionarJugadorCaster(lastCasterSearch.profileId, lastCasterSearch.playerName);
     }
   } else {
     destroyCasterBuscarSection();
@@ -851,6 +834,7 @@ function showNewMatchToast(dashboardButton) {
     }
   }, 1000);
 }
+
 
 
 
