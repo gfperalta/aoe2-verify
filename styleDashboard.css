@@ -159,7 +159,8 @@
 
 /* Desde Smurf en adelante: todas las columnas con la clase col-smurf y col-elo centradas */
 .caster-players-table .col-smurf,
-.caster-players-table .col-elo {
+.caster-players-table .col-elo,
+.caster-players-table .col-elo-bar {
   text-align: center;
   vertical-align: middle;
 }
@@ -341,6 +342,62 @@
   line-height: 1.1;
 }
 
+/* ============================
+   Barra de ELO 1v1 actual
+   ============================ */
+.col-elo-bar {
+  vertical-align: middle;
+  padding: 6px 14px;
+}
+
+.elo-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.elo-bar-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.elo-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+
+.elo-bar-value {
+  flex: none;
+  width: 48px;
+  text-align: right;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e6e6e6;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Columna aparte con el ELO máximo histórico, alineada para todos */
+.col-elo-max {
+  vertical-align: middle;
+  text-align: center;
+  padding: 6px 8px;
+}
+
+.elo-max-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #8fa3b0;
+  font-variant-numeric: tabular-nums;
+}
+
 /*  Estilos para columnas de Partidas (idéntico a ELO)  */
 .col-partidas {
   vertical-align: middle;
@@ -408,6 +465,21 @@
   width: 150px !important;  /* 🔹 ancho fijo */
   min-width: 150px !important;
   max-width: 150px !important;
+  text-align: center;
+}
+
+/* La barra de ELO 1v1 ahora ocupa también el ancho que antes usaba la
+   columna de ELO TG (ya eliminada de esta vista). */
+.caster-players-table .col-elo-bar {
+  width: 320px !important;
+  min-width: 320px !important;
+  max-width: 320px !important;
+}
+
+.caster-players-table .col-elo-max {
+  width: 70px !important;
+  min-width: 70px !important;
+  max-width: 70px !important;
   text-align: center;
 }
 
@@ -560,34 +632,6 @@
 .hidden {
   display: none !important;
 }
-
-/*Columna de APM*/
-.col-apm {
-  width: 80px;
-  text-align: center;
-  color: #fff;
-  font-weight: 500;
-  vertical-align: middle;
-}
-
-
-/* --- Spinner para columna APM --- */
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #ccc;
-  border-top: 2px solid #3498db;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto;
-}
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-
-
 
 
 
