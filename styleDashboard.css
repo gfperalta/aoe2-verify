@@ -39,6 +39,12 @@
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.caster-header-btn.btn-volver-busqueda {
+  min-width: auto;
 }
 
 
@@ -133,7 +139,6 @@
   background: linear-gradient(90deg, #1b2735, #16163f);
   color: #f0f0f0;
 }
-
 
 
 
@@ -269,6 +274,39 @@
   color: var(--color-principal5); /* turquesa neón */
   box-shadow: 0 0 8px rgba(0, 255, 231, 0.3);
   transform: scale(1.05);
+}
+
+/* Variante: cuenta smurf con ELO 1v1 superior al de la cuenta actual */
+.smurf-si.smurf-alerta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: 140px;
+  color: #ff4d4d; /* mismo rojo que .elo-higher, para indicar alerta */
+  background: transparent;
+  padding: 2px 6px;
+}
+
+.smurf-si.smurf-alerta:hover {
+  background: rgba(255, 77, 77, 0.1);
+  color: #ff6b6b;
+  transform: scale(1.05);
+}
+
+.smurf-alerta-nombre {
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.smurf-alerta-elo {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.95;
 }
 
 
@@ -516,6 +554,8 @@
 
 
 
+
+
 /*Adecuaciones varias    ==================================*/
 .hidden {
   display: none !important;
@@ -582,6 +622,7 @@
 
 
 
+
 /* Transición para las columnas */
 .fade-group {
   transition: opacity 0.3s ease, transform 0.3s ease;
@@ -593,6 +634,8 @@
   pointer-events: none;
   display: none !important; /* 🔹 asegura que la tabla se reajuste sin huecos */
 }
+
+
 
 
 

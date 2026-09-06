@@ -33,7 +33,16 @@ function mostrarSeccion(target) {
 document.querySelectorAll('.card-btn').forEach(btn => {
   btn.addEventListener('click', e => {
     e.preventDefault();
+    e.stopPropagation(); // evita que el clic también dispare el handler de la tarjeta
     const target = btn.getAttribute('data-section');
+    if (target) mostrarSeccion(target);
+  });
+});
+
+// Tarjetas completas (Inicio): clic en cualquier parte de la tarjeta abre la sección
+document.querySelectorAll('.service-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const target = card.querySelector('.card-btn')?.getAttribute('data-section');
     if (target) mostrarSeccion(target);
   });
 });
