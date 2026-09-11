@@ -749,11 +749,27 @@ function startCountdownAnimation(seconds, countdownText, indicator) {
 
 async function checkForUpdates() {
   if (!selectedCasterProfileId) return;
+
+  // 🔹 Igual que en obtenerPartidasCaster: si mientras esta petición está en
+  // vuelo el usuario busca otro jugador (obtenerPartidasCaster incrementa
+  // obtenerPartidasRequestId), esta respuesta ya quedó vieja y no debe
+  // pisar lo que se está mostrando. Antes checkForUpdates no respetaba
+  // esto — podía correr en paralelo con obtenerPartidasCaster (dispara a
+  // los 200ms de cada búsqueda/restauración) y ganarle la carrera,
+  // dejando la tarjeta y el botón "Ver dashboard" en un estado inconsistente.
+  const miRequestId = obtenerPartidasRequestId;
+
   try {
     // 🔹 Anti-caché: ver nota en obtenerPartidasCaster().
     const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${selectedCasterProfileId}&search=&leaderboard_ids=&page=1&language=es&_=${Date.now()}`;
     const res = await fetch(url, { cache: "no-store" });
+
+    if (miRequestId !== obtenerPartidasRequestId) return; // hay una búsqueda más nueva en curso
+    if (!res.ok) return; // p. ej. 429: no hay nada nuevo que mostrar, reintentará en el próximo ciclo
+
     const data = await res.json();
+    if (miRequestId !== obtenerPartidasRequestId) return;
+
     const matches = data.matches || [];
 
     if (!matches.length) return;
@@ -761,25 +777,42 @@ async function checkForUpdates() {
     const lastKnown = currentMatches[0];
     const latest = matches[0];
 
+    // 🔹 0️⃣ Si currentMatches está vacío, todavía no tenemos una "línea
+    // base" con qué comparar (por ejemplo, justo después de restaurar la
+    // búsqueda al volver del dashboard, donde currentMatches se resetea a
+    // []). Ojo: esto NO es que haya una partida nueva de verdad — es sólo
+    // la primera vez que este monitor ve datos. Antes, este caso caía en
+    // "isNewMatch" por accidente y mostraba el aviso de "¡partida nueva!",
+    // que si no se cerraba a tiempo, autoclickeaba "Ver dashboard" a los
+    // 10 segundos y devolvía al usuario al dashboard sin que lo pidiera
+    // — eso es lo que se veía como "el botón queda inactivo".
+    const esPrimeraObservacion = !lastKnown;
+
     // 🔹 1️⃣ Si hay una nueva partida, refrescar
-    const isNewMatch = !lastKnown || latest.matchId !== lastKnown.matchId;
+    const isNewMatch = !esPrimeraObservacion && latest.matchId !== lastKnown.matchId;
 
     // 🔹 2️⃣ Si es la misma partida pero cambió de estado (por ejemplo terminó), refrescar también
     const matchStateChanged =
-      lastKnown &&
+      !esPrimeraObservacion &&
       latest.matchId === lastKnown.matchId &&
       lastKnown.finished !== latest.finished;
 
-    if (isNewMatch || matchStateChanged) {
+    if (esPrimeraObservacion || isNewMatch || matchStateChanged) {
       currentMatches = matches;
       currentPage = 0;
       renderCasterMatch();
 
-      // Esperar un pequeño retardo para que el botón "Ver dashboard" exista en el DOM
-      setTimeout(() => {
-        const btn = document.getElementById("btnDashboard");
-        if (btn) showNewMatchToast(btn);
-      }, 400);
+      // El aviso de "partida nueva" (con su autoclick a los 10s) sólo
+      // tiene sentido cuando de verdad hay algo nuevo que comparar contra
+      // lo anterior — nunca en la primera observación.
+      if (isNewMatch || matchStateChanged) {
+        // Esperar un pequeño retardo para que el botón "Ver dashboard" exista en el DOM
+        setTimeout(() => {
+          if (miRequestId !== obtenerPartidasRequestId) return; // ya se buscó otro jugador mientras tanto
+          const btn = document.getElementById("btnDashboard");
+          if (btn) showNewMatchToast(btn);
+        }, 400);
+      }
     }
 
   } catch (err) {
