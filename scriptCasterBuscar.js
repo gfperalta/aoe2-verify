@@ -158,20 +158,28 @@ function guardarBusquedaReciente(profileId, playerName) {
 // (per_page=1, ~4 KB) y, si todavía no tiene hora de fin, se muestra "EN VIVO".
 // Para no chocar con el límite de peticiones de la API pública (~16 por
 // ventana corta): se consulta en lotes pequeños, se recuerda el resultado
-// un rato, se deduplican consultas y, ante cualquier error (p. ej. 429),
-// se deja de consultar y no se muestra nada falso.
-const EN_VIVO_TTL_MS = 50000;        // cuánto se reutiliza un resultado
-const EN_VIVO_TTL_ERROR_MS = 15000;  // tras un error, esperar antes de reintentar
+// un rato, se deduplican consultas y, si la API responde 429, se pausa esa
+// pasada (lo que falte se completa en la siguiente, unos segundos después)
+// sin mostrar nada falso. Mientras la lista esté a la vista se refresca
+// sola cada EN_VIVO_REFRESCO_MS.
+const EN_VIVO_TTL_MS = 25000;        // cuánto se reutiliza un resultado
+const EN_VIVO_TTL_ERROR_MS = 10000;  // tras un error, esperar antes de reintentar
+const EN_VIVO_REFRESCO_MS = 30000;   // cada cuánto se refresca la lista visible
 const EN_VIVO_MAX_HORAS = 4;         // una partida "sin fin" más vieja se considera abandonada
 const EN_VIVO_LOTE = 4;              // consultas simultáneas
 const enVivoCache = new Map();       // profileId -> { live, ts, error }
 const enVivoPendiente = new Set();
 let enVivoTimer = null;
+let enVivoIntervalo = null;
+let enVivoEnCurso = false;
 
+// Devuelve true/false (en vivo o no), "limite" si la API respondió 429,
+// o null ante cualquier otro error (red, 5xx...)
 async function consultarEnVivo(profileId) {
   try {
     const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${encodeURIComponent(profileId)}&search=&leaderboard_ids=&page=1&per_page=1&language=es&_=${Date.now()}`;
     const res = await fetch(url, { cache: "no-store" });
+    if (res.status === 429) return "limite";
     if (!res.ok) return null; // error: no sabemos
     const data = await res.json();
     const m = data.matches && data.matches[0];
@@ -193,36 +201,69 @@ function aplicarEnVivo() {
 }
 
 async function actualizarEnVivoRecientes() {
-  const ahora = Date.now();
-  const ids = obtenerBusquedasRecientes()
-    .map((r) => String(r.profileId))
-    .filter((id) => {
-      const c = enVivoCache.get(id);
-      const ttl = c && c.error ? EN_VIVO_TTL_ERROR_MS : EN_VIVO_TTL_MS;
-      return !enVivoPendiente.has(id) && !(c && ahora - c.ts < ttl);
-    });
+  if (enVivoEnCurso) return; // ya hay una pasada en marcha
+  enVivoEnCurso = true;
+  try {
+    const ahora = Date.now();
+    const ids = obtenerBusquedasRecientes()
+      .map((r) => String(r.profileId))
+      .filter((id) => {
+        const c = enVivoCache.get(id);
+        const ttl = c && c.error ? EN_VIVO_TTL_ERROR_MS : EN_VIVO_TTL_MS;
+        return !enVivoPendiente.has(id) && !(c && ahora - c.ts < ttl);
+      });
 
-  let abortar = false;
-  for (let i = 0; i < ids.length && !abortar; i += EN_VIVO_LOTE) {
-    const lote = ids.slice(i, i + EN_VIVO_LOTE);
-    lote.forEach((id) => enVivoPendiente.add(id));
-    await Promise.all(
-      lote.map(async (id) => {
-        const vivo = await consultarEnVivo(id);
-        enVivoPendiente.delete(id);
-        if (vivo === null) {
-          // Error: conservar lo último que se sabía y no seguir consultando
-          abortar = true;
-          const previo = enVivoCache.get(id);
-          enVivoCache.set(id, { live: previo ? previo.live : false, ts: Date.now(), error: true });
-        } else {
-          enVivoCache.set(id, { live: vivo, ts: Date.now() });
-        }
-      })
-    );
-    aplicarEnVivo();
+    let pausar = false;
+    for (let i = 0; i < ids.length && !pausar; i += EN_VIVO_LOTE) {
+      const lote = ids.slice(i, i + EN_VIVO_LOTE);
+      lote.forEach((id) => enVivoPendiente.add(id));
+      await Promise.all(
+        lote.map(async (id) => {
+          const vivo = await consultarEnVivo(id);
+          enVivoPendiente.delete(id);
+          if (vivo === "limite") pausar = true; // límite de la API: no insistir en esta pasada
+          if (vivo === null || vivo === "limite") {
+            // Error: conservar lo último que se sabía; se reintenta en la próxima pasada
+            const previo = enVivoCache.get(id);
+            enVivoCache.set(id, { live: previo ? previo.live : false, ts: Date.now(), error: true });
+          } else {
+            enVivoCache.set(id, { live: vivo, ts: Date.now() });
+          }
+        })
+      );
+      aplicarEnVivo();
+    }
+  } finally {
+    enVivoEnCurso = false;
   }
 }
+
+// Refresco periódico: solo corre mientras la lista de recientes está a la
+// vista (se detiene solo al reemplazarla o al salir de la sección) y no
+// gasta peticiones si la pestaña está en segundo plano.
+function iniciarRefrescoEnVivo() {
+  if (enVivoIntervalo) return;
+  enVivoIntervalo = setInterval(() => {
+    if (!document.querySelector("#casterResults .recent-row")) {
+      detenerRefrescoEnVivo();
+      return;
+    }
+    if (document.hidden) return;
+    actualizarEnVivoRecientes();
+  }, EN_VIVO_REFRESCO_MS);
+}
+
+function detenerRefrescoEnVivo() {
+  clearInterval(enVivoIntervalo);
+  enVivoIntervalo = null;
+}
+
+// Al volver a la pestaña, refrescar de inmediato (respeta el tiempo de caché)
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && document.querySelector("#casterResults .recent-row")) {
+    actualizarEnVivoRecientes();
+  }
+});
 
 // Quita una búsqueda del historial (para las que se hicieron solo por curiosidad)
 function eliminarBusquedaReciente(profileId) {
@@ -288,7 +329,10 @@ function renderBusquedasRecientes() {
   aplicarEnVivo();
   clearTimeout(enVivoTimer);
   enVivoTimer = setTimeout(() => {
-    if (document.querySelector("#casterResults .recent-row")) actualizarEnVivoRecientes();
+    if (document.querySelector("#casterResults .recent-row")) {
+      actualizarEnVivoRecientes();
+      iniciarRefrescoEnVivo();
+    }
   }, 400);
 }
 
@@ -968,6 +1012,8 @@ function stopAutoMonitorVisual() {
 function destroyCasterBuscarSection() {
   clearInterval(monitorInterval);
   clearInterval(window.countdownTimer);
+  detenerRefrescoEnVivo();
+  clearTimeout(enVivoTimer);
 
   const indicator = document.getElementById("autoMonitorIndicator");
   if (indicator) {
