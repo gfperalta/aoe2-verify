@@ -356,14 +356,14 @@ header {
 
 /* Historial de búsquedas: lista angosta, centrada, una línea por fila */
 #casterBuscar .recent-searches {
-  max-width: 380px;
+  max-width: 340px;
   margin: 0 auto;
 }
 
 #casterBuscar .search-row.recent-row {
   display: grid;
   /* estado "en vivo" (columna fija) | nombre (ocupa todo lo libre) | ID pegado a la × | × */
-  grid-template-columns: 70px 1fr auto auto;
+  grid-template-columns: 20px 1fr auto auto;
   align-items: center;
   column-gap: 10px;
   padding: 5px 10px;
@@ -378,20 +378,29 @@ header {
   white-space: nowrap;
 }
 
-/* Etiqueta "EN VIVO" (reutiliza el estilo de .live-indicator). Ocupa siempre
-   su columna a la izquierda del nick: cuando no aplica se oculta con
-   visibility (no con display) para que los nombres queden alineados y no
-   se muevan cuando alguien entra o sale de vivo. */
+/* Ícono de transmisión "en vivo" (ondas rojas). Ocupa siempre su columna a la
+   izquierda del nick: cuando no aplica se oculta con visibility (no con
+   display) para que los nombres queden alineados y no se muevan cuando
+   alguien entra o sale de vivo. */
 #casterBuscar .recent-row .live-badge {
-  margin-top: 0;
+  display: inline-flex;
   justify-self: start;
-  white-space: nowrap;
-  padding: 2px 7px;
-  font-size: 0.62rem;
+  color: #ff3b3b;
+  filter: drop-shadow(0 0 3px rgba(255, 0, 0, 0.6));
 }
 #casterBuscar .recent-row .live-badge[hidden] {
   display: inline-flex;
   visibility: hidden;
+}
+#casterBuscar .recent-row .live-badge .lb-onda {
+  animation: lbOnda 1.6s infinite;
+}
+#casterBuscar .recent-row .live-badge .lb-onda2 {
+  animation-delay: 0.3s;
+}
+@keyframes lbOnda {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
 /* anula el ajuste vertical (top:10px) que servía para las filas de 2 líneas */

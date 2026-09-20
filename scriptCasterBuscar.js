@@ -303,7 +303,7 @@ function renderBusquedasRecientes() {
     row.dataset.profileId = r.profileId;
     // Una sola línea: nombre (con etiqueta "EN VIVO" si aplica) a la izquierda, ID y "×" al final
     row.innerHTML = `
-      <span class="live-indicator live-badge" hidden>En vivo</span>
+      <span class="live-badge" hidden role="img" title="En vivo" aria-label="En vivo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="lb-onda lb-onda2" d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/><path class="lb-onda" d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></span>
       <div class="sr-name">${escapeHtml(r.name)}</div>
       <div class="sr-right">ID: ${r.profileId}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
