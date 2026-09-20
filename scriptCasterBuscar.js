@@ -125,7 +125,7 @@ function initCasterBuscarSection() {
 // Búsquedas recientes (se guardan en el navegador)
 // =============================
 const RECENT_SEARCHES_KEY = "aoe2verify_casterRecentSearches";
-const MAX_RECENT_SEARCHES = 5;
+const MAX_RECENT_SEARCHES = 10;
 
 function obtenerBusquedasRecientes() {
   try {
@@ -148,6 +148,16 @@ function guardarBusquedaReciente(profileId, playerName) {
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recientes));
   } catch (e) {
     console.error("No se pudo guardar la búsqueda reciente:", e);
+  }
+}
+
+// Quita una búsqueda del historial (para las que se hicieron solo por curiosidad)
+function eliminarBusquedaReciente(profileId) {
+  try {
+    const recientes = obtenerBusquedasRecientes().filter((r) => r.profileId !== profileId);
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recientes));
+  } catch (e) {
+    console.error("No se pudo eliminar la búsqueda reciente:", e);
   }
 }
 
@@ -176,10 +186,17 @@ function renderBusquedasRecientes() {
         <div class="sr-meta">Búsqueda reciente</div>
       </div>
       <div class="sr-right">ID: ${r.profileId}</div>
+      <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
     row.addEventListener("click", () =>
       seleccionarJugadorCaster(r.profileId, r.name)
     );
+    // El botón "×" elimina la entrada sin seleccionar al jugador
+    row.querySelector(".recent-delete-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      eliminarBusquedaReciente(r.profileId);
+      renderBusquedasRecientes();
+    });
     frag.appendChild(row);
   });
 
