@@ -356,24 +356,18 @@ header {
 
 /* Historial de búsquedas: lista angosta, centrada, una línea por fila */
 #casterBuscar .recent-searches {
-  max-width: 340px;
+  max-width: 380px;
   margin: 0 auto;
 }
 
 #casterBuscar .search-row.recent-row {
   display: grid;
-  grid-template-columns: 1fr auto auto; /* nombre (ocupa todo lo libre) | ID pegado a la × | × */
+  /* estado "en vivo" (columna fija) | nombre (ocupa todo lo libre) | ID pegado a la × | × */
+  grid-template-columns: 70px 1fr auto auto;
   align-items: center;
   column-gap: 10px;
   padding: 5px 10px;
   margin-bottom: 4px;
-}
-
-#casterBuscar .recent-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
 }
 
 #casterBuscar .recent-row .sr-name {
@@ -384,14 +378,21 @@ header {
   white-space: nowrap;
 }
 
-/* Etiqueta "EN VIVO" (reutiliza el estilo de .live-indicator) */
-#casterBuscar .recent-name .live-badge {
+/* Etiqueta "EN VIVO" (reutiliza el estilo de .live-indicator). Ocupa siempre
+   su columna a la izquierda del nick: cuando no aplica se oculta con
+   visibility (no con display) para que los nombres queden alineados y no
+   se muevan cuando alguien entra o sale de vivo. */
+#casterBuscar .recent-row .live-badge {
   margin-top: 0;
-  flex: none;
+  justify-self: start;
+  white-space: nowrap;
   padding: 2px 7px;
   font-size: 0.62rem;
 }
-#casterBuscar .recent-name .live-badge[hidden] { display: none; }
+#casterBuscar .recent-row .live-badge[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+}
 
 /* anula el ajuste vertical (top:10px) que servía para las filas de 2 líneas */
 #casterBuscar .recent-row .sr-right {
