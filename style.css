@@ -354,6 +354,25 @@ header {
   margin-bottom: 8px;
 }
 
+.recent-delete-btn {
+  margin-left: 12px;
+  background: transparent;
+  border: none;
+  color: var(--color-principal6);
+  opacity: 0.5;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.recent-delete-btn:hover,
+.recent-delete-btn:focus-visible {
+  opacity: 1;
+  color: #ff6b6b;
+}
+
 .search-row {
   display: flex;
   justify-content: space-between;
