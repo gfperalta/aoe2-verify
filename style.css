@@ -369,6 +369,13 @@ header {
   margin-bottom: 4px;
 }
 
+#casterBuscar .recent-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 #casterBuscar .recent-row .sr-name {
   text-align: left;
   min-width: 0;
@@ -376,6 +383,15 @@ header {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Etiqueta "EN VIVO" (reutiliza el estilo de .live-indicator) */
+#casterBuscar .recent-name .live-badge {
+  margin-top: 0;
+  flex: none;
+  padding: 2px 7px;
+  font-size: 0.62rem;
+}
+#casterBuscar .recent-name .live-badge[hidden] { display: none; }
 
 /* anula el ajuste vertical (top:10px) que servía para las filas de 2 líneas */
 #casterBuscar .recent-row .sr-right {
