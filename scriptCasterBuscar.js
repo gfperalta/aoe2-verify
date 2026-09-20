@@ -172,19 +172,23 @@ function renderBusquedasRecientes() {
 
   const frag = document.createDocumentFragment();
 
+  // Contenedor propio del historial (angosto y centrado), para no afectar
+  // el ancho de la lista de resultados cuando se escribe un nombre.
+  const lista = document.createElement("div");
+  lista.className = "recent-searches";
+  frag.appendChild(lista);
+
   const label = document.createElement("div");
   label.className = "recent-searches-label";
   label.textContent = "Búsquedas recientes";
-  frag.appendChild(label);
+  lista.appendChild(label);
 
   recientes.forEach((r) => {
     const row = document.createElement("div");
-    row.className = "search-row";
+    row.className = "search-row recent-row";
+    // Una sola línea: nombre a la izquierda, ID al centro y "×" al final
     row.innerHTML = `
-      <div class="sr-left">
-        <div class="sr-name">${escapeHtml(r.name)}</div>
-        <div class="sr-meta">Búsqueda reciente</div>
-      </div>
+      <div class="sr-name">${escapeHtml(r.name)}</div>
       <div class="sr-right">ID: ${r.profileId}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
@@ -197,7 +201,7 @@ function renderBusquedasRecientes() {
       eliminarBusquedaReciente(r.profileId);
       renderBusquedasRecientes();
     });
-    frag.appendChild(row);
+    lista.appendChild(row);
   });
 
   casterResults.innerHTML = "";
