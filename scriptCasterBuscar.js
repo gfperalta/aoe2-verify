@@ -151,6 +151,79 @@ function guardarBusquedaReciente(profileId, playerName) {
   }
 }
 
+// =============================
+// "EN VIVO" en las búsquedas recientes
+// =============================
+// Por cada jugador del historial se pide SOLO su partida más reciente
+// (per_page=1, ~4 KB) y, si todavía no tiene hora de fin, se muestra "EN VIVO".
+// Para no chocar con el límite de peticiones de la API pública (~16 por
+// ventana corta): se consulta en lotes pequeños, se recuerda el resultado
+// un rato, se deduplican consultas y, ante cualquier error (p. ej. 429),
+// se deja de consultar y no se muestra nada falso.
+const EN_VIVO_TTL_MS = 50000;        // cuánto se reutiliza un resultado
+const EN_VIVO_TTL_ERROR_MS = 15000;  // tras un error, esperar antes de reintentar
+const EN_VIVO_MAX_HORAS = 4;         // una partida "sin fin" más vieja se considera abandonada
+const EN_VIVO_LOTE = 4;              // consultas simultáneas
+const enVivoCache = new Map();       // profileId -> { live, ts, error }
+const enVivoPendiente = new Set();
+let enVivoTimer = null;
+
+async function consultarEnVivo(profileId) {
+  try {
+    const url = `https://data.aoe2companion.com/api/matches?direction=forward&profile_ids=${encodeURIComponent(profileId)}&search=&leaderboard_ids=&page=1&per_page=1&language=es&_=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null; // error: no sabemos
+    const data = await res.json();
+    const m = data.matches && data.matches[0];
+    if (!m) return false;
+    const horas = (Date.now() - new Date(m.started).getTime()) / 3600000;
+    return !m.finished && horas <= EN_VIVO_MAX_HORAS;
+  } catch {
+    return null;
+  }
+}
+
+// Muestra u oculta la etiqueta en las filas visibles según lo que hay en caché
+function aplicarEnVivo() {
+  document.querySelectorAll("#casterResults .recent-row").forEach((row) => {
+    const c = enVivoCache.get(String(row.dataset.profileId));
+    const badge = row.querySelector(".live-badge");
+    if (badge) badge.hidden = !(c && c.live);
+  });
+}
+
+async function actualizarEnVivoRecientes() {
+  const ahora = Date.now();
+  const ids = obtenerBusquedasRecientes()
+    .map((r) => String(r.profileId))
+    .filter((id) => {
+      const c = enVivoCache.get(id);
+      const ttl = c && c.error ? EN_VIVO_TTL_ERROR_MS : EN_VIVO_TTL_MS;
+      return !enVivoPendiente.has(id) && !(c && ahora - c.ts < ttl);
+    });
+
+  let abortar = false;
+  for (let i = 0; i < ids.length && !abortar; i += EN_VIVO_LOTE) {
+    const lote = ids.slice(i, i + EN_VIVO_LOTE);
+    lote.forEach((id) => enVivoPendiente.add(id));
+    await Promise.all(
+      lote.map(async (id) => {
+        const vivo = await consultarEnVivo(id);
+        enVivoPendiente.delete(id);
+        if (vivo === null) {
+          // Error: conservar lo último que se sabía y no seguir consultando
+          abortar = true;
+          const previo = enVivoCache.get(id);
+          enVivoCache.set(id, { live: previo ? previo.live : false, ts: Date.now(), error: true });
+        } else {
+          enVivoCache.set(id, { live: vivo, ts: Date.now() });
+        }
+      })
+    );
+    aplicarEnVivo();
+  }
+}
+
 // Quita una búsqueda del historial (para las que se hicieron solo por curiosidad)
 function eliminarBusquedaReciente(profileId) {
   try {
@@ -186,9 +259,10 @@ function renderBusquedasRecientes() {
   recientes.forEach((r) => {
     const row = document.createElement("div");
     row.className = "search-row recent-row";
-    // Una sola línea: nombre a la izquierda, ID al centro y "×" al final
+    row.dataset.profileId = r.profileId;
+    // Una sola línea: nombre (con etiqueta "EN VIVO" si aplica) a la izquierda, ID y "×" al final
     row.innerHTML = `
-      <div class="sr-name">${escapeHtml(r.name)}</div>
+      <div class="recent-name"><span class="sr-name">${escapeHtml(r.name)}</span><span class="live-indicator live-badge" hidden>En vivo</span></div>
       <div class="sr-right">ID: ${r.profileId}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
@@ -206,6 +280,16 @@ function renderBusquedasRecientes() {
 
   casterResults.innerHTML = "";
   casterResults.appendChild(frag);
+
+  // Mostrar de inmediato lo que ya se sabe y refrescar lo que falte. Se
+  // espera un momento por si esta lista se reemplaza enseguida (p. ej. al
+  // restaurar una búsqueda al volver del dashboard): así no se gastan
+  // peticiones que competirían con la carga de las partidas.
+  aplicarEnVivo();
+  clearTimeout(enVivoTimer);
+  enVivoTimer = setTimeout(() => {
+    if (document.querySelector("#casterResults .recent-row")) actualizarEnVivoRecientes();
+  }, 400);
 }
 
 // =============================
