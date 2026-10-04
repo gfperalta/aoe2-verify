@@ -11,7 +11,7 @@ let currentMatches = [];
 let currentPage = 0;
 let monitorInterval = null;
 let monitorActive = false;
-let monitorDelay = 10;
+let monitorDelay = 5;
 
 // 🔹 Ficha de la última petición de partidas lanzada (ver obtenerPartidasCaster).
 // Sirve para descartar una respuesta que llega tarde y "atrasada": si el
@@ -56,8 +56,8 @@ function initCasterBuscarSection() {
         Buscar nuevas partidas cada:
       </label>
       <select id="autoMonitorSelect" disabled>
-        <option value="5">5 segundos</option>
-        <option value="10" selected>10 segundos</option>
+        <option value="5" selected>5 segundos</option>
+        <option value="10">10 segundos</option>
         <option value="20">20 segundos</option>
         <option value="30">30 segundos</option>
         <option value="60">60 segundos</option>
@@ -451,6 +451,39 @@ setTimeout(() => {
 // =============================
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Resumen corto de una lista de partidas, para saber si cambió algo visible
+function firmaPartidas(lista) {
+  return (lista || []).map((m) => `${m.matchId}:${m.finished ? 1 : 0}`).join("|");
+}
+
+// GET con límite de espera y reintentos ante 429 / errores 5xx / fallos de red
+// (respeta Retry-After). Devuelve el JSON o lanza el error si se agotan.
+async function fetchJsonApi(url, intentos = 4) {
+  for (let i = 1; ; i++) {
+    const ctrl = new AbortController();
+    const limite = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if ((res.status === 429 || res.status >= 500) && i < intentos) {
+        const ra = Number(res.headers.get("Retry-After"));
+        await sleep(ra > 0 ? Math.min(ra, 5) * 1000 : i * 1000);
+        continue;
+      }
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.sinReintento = true; // p. ej. 404: reintentar no sirve
+        throw err;
+      }
+      return await res.json();
+    } catch (e) {
+      if (e.sinReintento || i >= intentos) throw e;
+      await sleep(i * 1000);
+    } finally {
+      clearTimeout(limite);
+    }
+  }
+}
+
 async function obtenerPartidasCaster(profileId) {
   if (!profileId) return;
 
@@ -508,7 +541,21 @@ async function obtenerPartidasCaster(profileId) {
       const data = await res.json();
       if (miRequestId !== obtenerPartidasRequestId) return; // descartar si ya quedó vieja
 
-      currentMatches = data.matches || [];
+      const nuevas = data.matches || [];
+
+      // 🔹 Al volver del dashboard, el monitoreo (que arranca a los 200 ms)
+      // puede ganarle a esta petición y dibujar ya la tarjeta. Si lo que llegó
+      // es lo mismo, no se vuelve a dibujar: reemplazar el botón "Ver
+      // dashboard" justo cuando el usuario lo pulsa hacía que el clic se
+      // perdiera y el botón pareciera inactivo.
+      if (
+        casterContainer.querySelector("#btnDashboard") &&
+        firmaPartidas(nuevas) === firmaPartidas(currentMatches)
+      ) {
+        return;
+      }
+
+      currentMatches = nuevas;
       currentPage = 0;
       renderCasterMatch();
       return; // éxito
@@ -534,28 +581,29 @@ async function construirDatosCompletosPartida(match) {
     throw new Error("La partida no tiene equipos o jugadores válidos.");
   }
 
-  const jugadoresReales = [];
+  // 1️⃣ Obtener jugadores reales (en paralelo; Promise.all conserva el orden)
+  const idsJugadores = match.teams
+    .flatMap((team) => team?.players || [])
+    .map((player) => player?.profileId)
+    .filter(Boolean);
 
-  // 1️⃣ Obtener jugadores reales
-  for (const team of match.teams) {
-    if (!team?.players) continue;
-
-    for (const player of team.players) {
-      const profileId = player?.profileId;
-      if (!profileId) continue;
-
+  const respuestasJugadores = await Promise.all(
+    idsJugadores.map(async (profileId) => {
       const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(
         profileId
       )}?language=es&extend=stats%2Cprofiles.avatar_medium_url%2Cprofiles.avatar_full_url&page=1`;
-
       try {
-        const res = await fetch(url);
-        const data = await res.json();
-        jugadoresReales.push(data);
+        return await fetchJsonApi(url);
       } catch (err) {
         console.error("Error obteniendo jugador real:", profileId, err);
+        return null;
       }
-    }
+    })
+  );
+  const jugadoresReales = respuestasJugadores.filter(Boolean);
+  if (jugadoresReales.length < idsJugadores.length) {
+    // Mejor avisar que abrir un dashboard con jugadores faltantes
+    throw new Error("No se pudieron cargar todos los jugadores de la partida.");
   }
 
   // 2️⃣ Obtener cuentas Smurf (en paralelo)
@@ -566,9 +614,7 @@ async function construirDatosCompletosPartida(match) {
     async function obtenerData(pid) {
       const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(pid)}?language=es&extend=stats&page=1`;
       try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("No encontrado");
-        return await res.json();
+        return await fetchJsonApi(url);
       } catch {
         return null;
       }
@@ -641,6 +687,75 @@ async function construirDatosCompletosPartida(match) {
   console.log("✅ Smurf:", smurfData);
 
   return match;
+}
+
+// =============================
+// Abrir el dashboard de una partida
+// =============================
+// Los datos completos se pueden empezar a cargar antes (precarga) mientras el
+// aviso de "partida nueva" cuenta hacia atrás; así, al abrir ya están listos.
+const PRECARGA_VIGENCIA_MS = 60000; // pasado este tiempo se vuelve a cargar
+let dashboardPrecarga = null;       // { matchId, promesa, desde }
+let cargandoDashboard = false;      // evita lanzar la carga dos veces con doble clic
+
+function obtenerDatosDashboard(match) {
+  const p = dashboardPrecarga;
+  if (p && p.matchId === match.matchId && Date.now() - p.desde < PRECARGA_VIGENCIA_MS) {
+    return p.promesa;
+  }
+  const promesa = construirDatosCompletosPartida(match);
+  const nueva = { matchId: match.matchId, promesa, desde: Date.now() };
+  dashboardPrecarga = nueva;
+  // Si falla, se descarta para que el siguiente intento cargue de nuevo
+  promesa.catch(() => {
+    if (dashboardPrecarga === nueva) dashboardPrecarga = null;
+  });
+  return promesa;
+}
+
+function precargarDashboard(match) {
+  if ((match?.teams || []).length > 2) return; // esas partidas no abren dashboard
+  obtenerDatosDashboard(match).catch(() => {}); // el error se muestra al abrirlo
+}
+
+async function abrirDashboard(match) {
+  if (cargandoDashboard) return;
+
+  const equipos = match?.teams || [];
+  if (equipos.length > 2) {
+    alert(
+      "⚠️ El sistema actualmente está diseñado para partidas de dos equipos.\n\n" +
+      "La partida que está intentando abrir tiene más de dos equipos,\n" +
+      "por lo tanto, el Dashboard no se abrirá."
+    );
+    return;
+  }
+
+  cargandoDashboard = true;
+  const loader = document.getElementById("loader-screen");
+  loader.classList.add("active"); // ventana de carga con spinner
+
+  try {
+    const matchCompleto = await obtenerDatosDashboard(match);
+
+    // 🔹 Guardamos el match completo (con jugadoresReales y Smurf) en memoria global
+    window.dashboardData = matchCompleto;
+
+    // 🔹 También lo guardamos en sessionStorage por si recargas la página
+    sessionStorage.setItem("dashboardData", JSON.stringify(matchCompleto));
+
+    loader.classList.remove("active");
+
+    // 🔹 Disparamos el cambio de sección hacia "caster"
+    document.dispatchEvent(new CustomEvent("sectionChange", { detail: "caster" }));
+  } catch (err) {
+    console.error("Error general al obtener datos de jugadores reales y smurfs:", err);
+    alert("❌ Error al obtener los datos. Inténtalo de nuevo.");
+  } finally {
+    // Pase lo que pase, la pantalla de carga no puede quedar pegada
+    loader.classList.remove("active");
+    cargandoDashboard = false;
+  }
 }
 
 // =============================
@@ -728,44 +843,7 @@ const team2Box = createTeamBox("Equipo 2", team2, winnerTeam === "team2");
   dashboardButton.id = "btnDashboard";
   dashboardButton.className = "btn-dashboard";
   dashboardButton.textContent = "Ver dashboard";
-  dashboardButton.addEventListener("click", () => {
-  // 🔹 Aquí se define lo que debe hacer el boton "Ver Dashboard"
-  const equipos = match?.teams || [];
-  if (equipos.length > 2) {
-    alert(
-      "⚠️ El sistema actualmente está diseñado para partidas de dos equipos.\n\n" +
-      "La partida que está intentando abrir tiene más de dos equipos,\n" +
-      "por lo tanto, el Dashboard no se abrirá."
-    );
-    return;
-  }
-
-  //ventana de carga con spiner
-  document.getElementById("loader-screen").classList.add("active");
-
-  (async () => {
-    try {
-      const matchCompleto = await construirDatosCompletosPartida(match);
-
-      //Se oculta la ventana de cargando
-      document.getElementById("loader-screen").classList.remove("active");
-
-      // 🔹 Guardamos el match completo (con jugadoresReales y Smurf) en memoria global
-      window.dashboardData = matchCompleto;
-
-      // 🔹 También lo guardamos en sessionStorage por si recargas la página
-      sessionStorage.setItem("dashboardData", JSON.stringify(matchCompleto));
-
-      // 🔹 Disparamos el cambio de sección hacia "caster"
-      document.dispatchEvent(new CustomEvent("sectionChange", { detail: "caster" }));
-    } catch (err) {
-      console.error("Error general al obtener datos de jugadores reales y smurfs:", err);
-      document.getElementById("loader-screen").classList.remove("active");
-      alert("❌ Error al obtener los datos.");
-    }
-  })();
-
-});
+  dashboardButton.addEventListener("click", () => abrirDashboard(match));
 
 
 
@@ -956,6 +1034,10 @@ async function checkForUpdates() {
       // tiene sentido cuando de verdad hay algo nuevo que comparar contra
       // lo anterior — nunca en la primera observación.
       if (isNewMatch || matchStateChanged) {
+        // Mientras corre la cuenta regresiva del aviso, se va cargando en
+        // segundo plano la información del dashboard.
+        precargarDashboard(latest);
+
         // Esperar un pequeño retardo para que el botón "Ver dashboard" exista en el DOM
         setTimeout(() => {
           if (miRequestId !== obtenerPartidasRequestId) return; // ya se buscó otro jugador mientras tanto
@@ -1049,6 +1131,11 @@ document.addEventListener("sectionChange", (e) => {
     if (window.__regresarCasterBuscar && lastCasterSearch) {
       window.__regresarCasterBuscar = false;
       seleccionarJugadorCaster(lastCasterSearch.profileId, lastCasterSearch.playerName);
+
+      // Foco en el campo de búsqueda con el nick seleccionado: basta con
+      // Supr y escribir el siguiente jugador.
+      casterInput.focus();
+      casterInput.select();
     }
   } else {
     destroyCasterBuscarSection();
@@ -1104,7 +1191,7 @@ function showNewMatchToast(dashboardButton) {
   countdown.style.fontWeight = "bold";
   countdown.style.fontSize = "18px";
 
-  let remaining = 10;
+  let remaining = 5;
   countdown.textContent = remaining;
 
   toast.innerHTML = `
@@ -1128,6 +1215,7 @@ function showNewMatchToast(dashboardButton) {
   cancelBtn.addEventListener("click", () => {
     clearInterval(toastTimer);
     overlay.remove();
+    dashboardPrecarga = null; // se canceló: se descarta lo precargado
   });
 
   toast.appendChild(cancelBtn);
