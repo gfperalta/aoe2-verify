@@ -65,6 +65,7 @@ function initCasterSection() {
   }
 
   const enVivo = !dashboardData.finished;
+  const verEnElJuego = enVivo && !dashboardData.abandoned && dashboardData.matchId ? botonVerEnElJuego(dashboardData.matchId) : "";
   const modo = [dashboardData.leaderboardName, dashboardData.gameModeName].filter(Boolean).join(" · ");
   const subtitulo = [modo, formatearFechaBonita(dashboardData.started)].filter(Boolean).join(" · ");
 
@@ -78,6 +79,7 @@ function initCasterSection() {
           <div class="dash-map">
             <h2 class="caster-map-name">${escapeHtml(dashboardData.mapName || "-")}</h2>
             ${enVivo ? `<span class="live">${icono("wave", 15, 'class="w"')}EN VIVO</span>` : ""}
+            ${verEnElJuego}
           </div>
           <div class="caster-map-date">${escapeHtml(subtitulo)}</div>
         </div>

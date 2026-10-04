@@ -826,6 +826,7 @@ function renderCasterMatch() {
   team2 = team2.sort((a, b) => (a.color ?? 0) - (b.color ?? 0));
 
   const enVivo = !match.finished && currentPage === 0;
+  const verEnElJuego = !match.finished && !match.abandoned && match.matchId ? botonVerEnElJuego(match.matchId) : "";
   const modo = [match.leaderboardName, match.gameModeName].filter(Boolean).join(" · ");
 
   const card = document.createElement("section");
@@ -837,6 +838,7 @@ function renderCasterMatch() {
         <div class="match-title">
           <h2>${escapeHtml(match.mapName || "-")}</h2>
           ${enVivo ? `<span class="live">${icono("wave", 15, 'class="w"')}EN VIVO</span>` : ""}
+          ${verEnElJuego}
         </div>
         <span class="match-sub">${escapeHtml(modo)}</span>
         <span class="match-date">Inicio: ${formatearFechaLocal(match.started)}</span>

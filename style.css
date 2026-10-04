@@ -165,6 +165,7 @@ main { flex: 1; min-height: 0; display: flex; }
 .btn-ghost:hover { background: var(--s2); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn.compact { padding: 0 12px; }
+.btn.sm { min-height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; }
 
 .chip {
   display: inline-flex;

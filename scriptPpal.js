@@ -2,6 +2,7 @@
 // Íconos (trazo, heredan el color del texto). Los usan todos los scripts.
 // =============================
 const ICONOS = {
+  eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
   upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3.5h16V16"/>',
@@ -17,6 +18,13 @@ const ICONOS = {
   map: '<path d="M3.5 6.5 9 4l6 2.5 5.5-2.5v13L15 19.5 9 17l-5.5 2.5z"/><path d="M9 4v13M15 6.5v13"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
 };
+
+// Botón que abre Age of Empires II y entra a mirar una partida en curso.
+// "aoe2de://1/<ID de la partida>" es el enlace que usa el propio juego para
+// espectar (requiere el juego instalado y su programa auxiliar "AOE URL Helper").
+function botonVerEnElJuego(matchId) {
+  return `<a class="btn btn-ghost sm btn-ver-juego" href="aoe2de://1/${encodeURIComponent(matchId)}" title="Abrir Age of Empires II y ver esta partida">${icono("eye", 16)}Ver en el juego</a>`;
+}
 
 function icono(nombre, tam = 18, extra = "") {
   return `<svg width="${tam}" height="${tam}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICONOS[nombre]}</svg>`;
