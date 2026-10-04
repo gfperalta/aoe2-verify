@@ -5,6 +5,7 @@
 let smurfInput = null;
 let resultsContainer = null;
 let tablaContainer = null;
+let statsContainer = null;
 let selectedProfileId = null;
 
 // =============================
@@ -15,24 +16,29 @@ function initSmurfSection() {
   if (!smurfSection) return;
 
   smurfSection.innerHTML = `
-  <div class="smurf-header">
-    <h2 class="smurf-title">Buscar cuentas Smurf</h2>
-    <p class="smurf-subtitle"></p>
+  <div class="page-head">
+    <h2 class="page-title">Buscar cuentas Smurf</h2>
+    <p class="page-sub">Descubre cuentas alternas o familiares vinculadas al perfil de un jugador.</p>
   </div>
 
-  <div class="smurf-search">
-    <div class="smurf-input-group">
-      <input type="text" id="smurfInput" class="smurf-input" placeholder="Escribe un nombre de jugador..." autocomplete="off" />
+  <div class="smurf-top">
+    <div class="smurf-search">
+      <div class="field">
+        ${icono("search", 20)}
+        <input type="text" id="smurfInput" class="input" placeholder="Escribe un nombre de jugador..." aria-label="Nombre del jugador" autocomplete="off" />
+      </div>
+      <div id="smurfResults" class="smurf-results"></div>
     </div>
+    <div id="smurfStats" class="stats"></div>
   </div>
 
-  <div id="smurfResults" class="smurf-results"></div>
-  <div id="smurfTableContainer" class="smurf-table-container"></div>
+  <div id="smurfTableContainer" class="smurf-table-container card fit"></div>
 `;
 
   smurfInput = document.querySelector("#smurfInput");
   resultsContainer = document.querySelector("#smurfResults");
   tablaContainer = document.querySelector("#smurfTableContainer");
+  statsContainer = document.querySelector("#smurfStats");
 
   if (smurfInput) smurfInput.addEventListener("input", handleSmurfInput);
 
@@ -49,6 +55,7 @@ function handleSmurfInput(e) {
   clearTimeout(debounceTimer);
   // Al iniciar nueva búsqueda, limpiar tabla
   if (tablaContainer) tablaContainer.innerHTML = "";
+  if (statsContainer) statsContainer.innerHTML = "";
   debounceTimer = setTimeout(() => {
     buscarProfiles(query);
   }, 400);
@@ -96,7 +103,7 @@ function renderSearchResults(profiles) {
         <div class="sr-name">${escapeHtml(p.name)}</div>
         <div class="sr-meta">País: ${escapeHtml(p.country || "-")} • Clan: ${escapeHtml(p.clan || "-")}</div>
       </div>
-      <div class="sr-right">ID: ${escapeHtml(String(p.profileId))}</div>
+      <div class="sr-right">ID ${escapeHtml(String(p.profileId))}</div>
     `;
     row.addEventListener("click", () => seleccionarJugador(p.profileId, p.name));
     frag.appendChild(row);
@@ -188,99 +195,80 @@ async function construirMatrizPrincipal(profileId) {
 function renderizarTabla(matriz) {
   if (!Array.isArray(matriz) || matriz.length === 0) {
     tablaContainer.innerHTML = `<div class="hint">No se encontraron cuentas familiares.</div>`;
+    if (statsContainer) statsContainer.innerHTML = "";
     return;
   }
 
-  const table = document.createElement("table");
-  table.className = "smurf-table";
-  const thead = document.createElement("thead");
+  const ref = matriz[0]; // primera fila (cuenta principal, referencia)
+  const campos = ["elo1v1", "max1v1", "juegos1v1", "eloTG", "maxTG", "juegosTG"];
+  const num = (v) => Number(v ?? 0);
+  const miles = (v) => num(v).toLocaleString("es-CL");
 
-  thead.innerHTML = `
-    <tr>
-      <th>#</th>
-      <th>Cuenta padre</th>
-      <th>Cuenta hija</th>
-      <th>Pais</th>
-      <th>ID Companion</th>
-      <th>Elo 1v1</th>
-      <th>Máx 1v1</th>
-      <th>Juegos 1v1</th>
-      <th>Elo TG</th>
-      <th>Máx TG</th>
-      <th>Juegos TG</th>
-    </tr>
-  `;
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-
-  const ref = matriz[0]; // primera fila (referencia)
-  
-  matriz.forEach((fila, i) => {
-  const tr = document.createElement("tr");
-
-  // Si es la primera fila, dejar la columna "Cuenta" vacía
-  const nombreCuenta = i === 0 ? "" : escapeHtml(fila.nombre);
-
-  // 🔹 Nuevo: el ID ahora es un enlace a AoE2 Companion
-  const enlaceId = `
-  <a href="https://aoe2companion.com/profile/${fila.id}"
-     target="_blank"
-     rel="noopener noreferrer"
-     class="companion-link">
-     ${fila.id}
-  </a>
-`;
-
-
-  tr.innerHTML = `
-    <td>${fila.n}</td>
-    <td>${escapeHtml(fila.padre)}</td>
-    <td>${nombreCuenta}</td>
-    <td>${fila.pais}</td>
-    <td>${enlaceId}</td>
-    <td>${fila.elo1v1}</td>
-    <td>${fila.max1v1}</td>
-    <td>${fila.juegos1v1}</td>
-    <td>${fila.eloTG}</td>
-    <td>${fila.maxTG}</td>
-    <td>${fila.juegosTG}</td>
-  `;
-
-  // 🔹 Colorear si es mayor al valor de la fila 1
-  if (i > 0) {
-    const celdas = tr.querySelectorAll("td");
-    const campos = ["elo1v1", "max1v1", "juegos1v1", "eloTG", "maxTG", "juegosTG"];
-    campos.forEach((campo, idx) => {
-      const valorFila = Number(fila[campo] ?? 0);
-      const valorRef = Number(matriz[0][campo] ?? 0);
-      if (!isNaN(valorFila) && !isNaN(valorRef) && valorFila > valorRef) {
-        const td = celdas[5 + idx];
-        if (td) {
-          td.style.color = "var(--color-principal4)";
-          td.style.fontWeight = "600";
-        }
-      }
-    });
+  // Resumen de arriba
+  const mayorElo = Math.max(...matriz.map((f) => num(f.elo1v1)));
+  const partidasTotales = matriz.reduce((t, f) => t + num(f.juegos1v1) + num(f.juegosTG), 0);
+  if (statsContainer) {
+    statsContainer.innerHTML = `
+      <div class="card stat"><span class="label">Cuentas encontradas</span><span class="num">${matriz.length}</span></div>
+      <div class="card stat"><span class="label">Mayor ELO 1v1</span><span class="num gold">${mayorElo}</span></div>
+      <div class="card stat"><span class="label">Partidas totales</span><span class="num">${miles(partidasTotales)}</span></div>
+    `;
   }
 
-  tbody.appendChild(tr);
-});
+  // Cuentas con ELO (actual o máximo) mayor que el de la principal
+  const conMayor = matriz.slice(1).filter((f) =>
+    ["elo1v1", "max1v1", "eloTG", "maxTG"].some((c) => num(f[c]) > num(ref[c]))
+  ).length;
+  const avisoMayor = conMayor
+    ? `<span class="chip gold">${icono("warn", 14)}${conMayor} ${conMayor === 1 ? "cuenta con ELO mayor" : "cuentas con ELO mayor"} que el principal</span>`
+    : "";
 
+  const filas = matriz.map((fila, i) => {
+    // Si es la primera fila, dejar la columna "Cuenta hija" vacía
+    const nombreCuenta = i === 0 ? "" : escapeHtml(fila.nombre);
 
-  table.appendChild(tbody);
+    // El ID es un enlace a AoE2 Companion
+    const enlaceId = `<a href="https://aoe2companion.com/profile/${fila.id}" target="_blank" rel="noopener noreferrer" class="companion-link">${fila.id}</a>`;
 
-  tablaContainer.innerHTML = "";
-  tablaContainer.appendChild(table);
+    // Valores mayores que los de la fila 1 se resaltan en verde
+    const celda = (campo) => {
+      const mayor = i > 0 && num(fila[campo]) > num(ref[campo]);
+      return `<td class="r num${mayor ? " mayor" : ""}">${fila[campo]}</td>`;
+    };
 
-  // Mensaje explicativo (solo si hay más de una fila)
-  if (matriz.length > 1) {
-    const msg = document.createElement("p");
-    msg.className = "tabla-nota";
-    msg.textContent =
-      "** Las celdas con color verde indican valores mayores que los de la cuenta principal (primera fila).";
-    tablaContainer.appendChild(msg);
-  }
+    return `
+      <tr>
+        <td class="num">${fila.n}</td>
+        <td>${escapeHtml(fila.padre)}</td>
+        <td><strong>${nombreCuenta}</strong></td>
+        <td>${escapeHtml(fila.pais)}</td>
+        <td class="num">${enlaceId}</td>
+        ${campos.map(celda).join("")}
+      </tr>`;
+  }).join("");
+
+  tablaContainer.innerHTML = `
+    <div class="table-head">
+      <h3>Cuentas de ${escapeHtml(ref.nombre)}</h3>
+      ${avisoMayor}
+    </div>
+    <div class="yscroll">
+      <table class="smurf-table" style="min-width:980px">
+        <thead>
+          <tr>
+            <th rowspan="2">#</th><th rowspan="2">Cuenta padre</th><th rowspan="2">Cuenta hija</th><th rowspan="2">País</th><th rowspan="2">ID Companion</th>
+            <th class="grp" colspan="3">1v1</th><th class="grp g" colspan="3">Team Game</th>
+          </tr>
+          <tr>
+            <th class="r">ELO</th><th class="r">Máx.</th><th class="r">Juegos</th>
+            <th class="r">ELO</th><th class="r">Máx.</th><th class="r">Juegos</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+    ${matriz.length > 1 ? `<p class="tabla-nota">** Las celdas con color verde indican valores mayores que los de la cuenta principal (primera fila).</p>` : ""}
+  `;
 }
 
 // =============================
