@@ -199,13 +199,27 @@ async function consultarEnVivo(profileId) {
   }
 }
 
-// Muestra u oculta la etiqueta en las filas visibles según lo que hay en caché
-function aplicarEnVivo() {
-  document.querySelectorAll("#casterResults .recent-row").forEach((row) => {
+// Muestra u oculta la etiqueta en las filas visibles según lo que hay en caché.
+// Con reordenar=true además pone primero a los que están en vivo; dentro de
+// cada grupo se respeta el orden del historial (el más reciente arriba). Solo
+// se reordena al terminar una pasada, para que la lista no se mueva mientras
+// van llegando los resultados.
+function aplicarEnVivo(reordenar = false) {
+  const filas = [...document.querySelectorAll("#casterResults .recent-row")];
+  filas.forEach((row) => {
     const c = enVivoCache.get(String(row.dataset.profileId));
     const badge = row.querySelector(".live-badge");
     if (badge) badge.hidden = !(c && c.live);
   });
+
+  if (!reordenar || !filas.length) return;
+  const enVivo = (row) => (row.querySelector(".live-badge")?.hidden === false ? 1 : 0);
+  const ordenadas = [...filas].sort(
+    (a, b) => enVivo(b) - enVivo(a) || Number(a.dataset.orden) - Number(b.dataset.orden)
+  );
+  if (ordenadas.every((fila, i) => fila === filas[i])) return; // ya está en ese orden
+  const contenedor = filas[0].parentNode;
+  ordenadas.forEach((fila) => contenedor.appendChild(fila));
 }
 
 async function actualizarEnVivoRecientes() {
@@ -243,6 +257,7 @@ async function actualizarEnVivoRecientes() {
       // Pausa entre lotes para repartir las consultas en el tiempo
       if (!pausar && i + EN_VIVO_LOTE < ids.length) await sleep(EN_VIVO_PAUSA_MS);
     }
+    aplicarEnVivo(true); // los que están en vivo pasan al principio
   } finally {
     enVivoEnCurso = false;
   }
@@ -314,10 +329,11 @@ function renderBusquedasRecientes(retardoEnVivoMs = 400) {
   rejilla.style.setProperty("--filas", Math.ceil(recientes.length / 2));
   lista.appendChild(rejilla);
 
-  recientes.forEach((r) => {
+  recientes.forEach((r, posicion) => {
     const row = document.createElement("div");
     row.className = "search-row recent-row";
     row.dataset.profileId = r.profileId;
+    row.dataset.orden = posicion; // orden del historial (para reordenar los "en vivo")
     row.title = `ID ${r.profileId}`; // el ID solo se ve al pasar el mouse
     // La fila del jugador que se está viendo queda resaltada
     if (String(r.profileId) === String(selectedCasterProfileId)) row.classList.add("sel");
@@ -346,7 +362,7 @@ function renderBusquedasRecientes(retardoEnVivoMs = 400) {
   // espera un momento por si esta lista se reemplaza enseguida (p. ej. al
   // restaurar una búsqueda al volver del dashboard): así no se gastan
   // peticiones que competirían con la carga de las partidas.
-  aplicarEnVivo();
+  aplicarEnVivo(true);
   clearTimeout(enVivoTimer);
   enVivoTimer = setTimeout(() => {
     if (document.querySelector("#casterResults .recent-row")) {
