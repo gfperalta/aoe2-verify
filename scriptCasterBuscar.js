@@ -307,17 +307,24 @@ function renderBusquedasRecientes(retardoEnVivoMs = 400) {
   label.textContent = "Búsquedas recientes";
   lista.appendChild(label);
 
+  // Los nicks se reparten en dos columnas (primero la de la izquierda, de
+  // arriba hacia abajo) para que quepan los 20 sin desplazarse
+  const rejilla = document.createElement("div");
+  rejilla.className = "recent-grid";
+  rejilla.style.setProperty("--filas", Math.ceil(recientes.length / 2));
+  lista.appendChild(rejilla);
+
   recientes.forEach((r) => {
     const row = document.createElement("div");
     row.className = "search-row recent-row";
     row.dataset.profileId = r.profileId;
+    row.title = `ID ${r.profileId}`; // el ID solo se ve al pasar el mouse
     // La fila del jugador que se está viendo queda resaltada
     if (String(r.profileId) === String(selectedCasterProfileId)) row.classList.add("sel");
-    // Una sola línea: nombre (con etiqueta "EN VIVO" si aplica) a la izquierda, ID y "×" al final
+    // Una sola línea: indicador "EN VIVO", nick y "×"
     row.innerHTML = `
       <span class="live-badge" hidden role="img" title="En vivo" aria-label="En vivo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="lb-onda lb-onda2" d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/><path class="lb-onda" d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></span>
       <div class="sr-name">${escapeHtml(r.name)}</div>
-      <div class="sr-right">ID ${r.profileId}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
     row.addEventListener("click", () =>
@@ -329,7 +336,7 @@ function renderBusquedasRecientes(retardoEnVivoMs = 400) {
       eliminarBusquedaReciente(r.profileId);
       renderBusquedasRecientes();
     });
-    lista.appendChild(row);
+    rejilla.appendChild(row);
   });
 
   casterResults.innerHTML = "";

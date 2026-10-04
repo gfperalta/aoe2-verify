@@ -91,7 +91,6 @@ function initCasterSection() {
       <button class="btn btn-ghost btn-ver-partidas" type="button">${icono("list", 18)}Ver partidas</button>
     </div>
     <div class="caster-root"></div>
-    <p class="dash-note">Barra: ELO actual dentro del rango de la partida (±300). Dorado: ELO máximo. Ámbar: cuenta smurf con ELO 1v1 superior al de la cuenta actual.</p>
   `;
 
 
