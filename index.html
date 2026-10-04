@@ -11,99 +11,119 @@
   <link rel="apple-touch-icon" sizes="180x180" href="Img/Logo.png" />
   <link rel="manifest" href="site.webmanifest" />
 
-  <!-- Hoja de estilos principal -->
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Hoja de estilos -->
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="styleDashboard.css" />
 </head>
 
 <body>
-  <header>
-  <div class="navbar">
-    <div class="inicio-icon">
-      <a href="#" data-section="inicio" title="Volver al inicio">
-        <img src="Img/home.png" alt="Inicio" />
+  <header class="bar">
+    <a class="brand" href="#" data-section="inicio" aria-label="AoE2Verify, ir al inicio">
+      <svg width="30" height="34" viewBox="0 0 32 36" aria-hidden="true"><path d="M8 8.5 10 3l3 3.2L16 1.5l3 4.7L22 3l2 5.5z" fill="#19C8FF"/><path d="M5 11.5c3.8-.8 7.5-2 11-3.6 3.5 1.6 7.2 2.8 11 3.6v8.2c0 6-4.6 10.4-11 13.3C9.6 30.1 5 25.7 5 19.7z" fill="rgba(25,200,255,.10)" stroke="#19C8FF" stroke-width="2.4" stroke-linejoin="round"/><path d="m11 20 4 4 7-8" stroke="#25D79A" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>AoE2<b>Verify</b></span>
+    </a>
+
+    <nav class="nav" aria-label="Herramientas">
+      <a href="#" data-section="inicio" class="on" aria-current="page">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/></svg>Inicio
       </a>
-    </div>
-
-    <div class="logo-wrapper">
-      <div class="logo-section">
-        <img src="Img/Logo.png" alt="AoE2Verify" class="logo">
-        <span class="title">AoE2Verify</span>
-      </div>
-    </div>
-
-    <div class="menu-placeholder"></div>
-  </div>
-</header>
-
-
+      <a href="#" data-section="smurf">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 13.8c1.8.7 3 2.4 3 5.2"/></svg>Smurf
+      </a>
+      <a href="#" data-section="jugadores">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M3.5 15h17M9.5 10v9.5"/></svg>Jugadores
+      </a>
+      <a href="#" data-section="casterBuscar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>Casters
+      </a>
+    </nav>
+  </header>
 
   <main>
     <div id="content-container">
       <!-- ========================= -->
-      <!-- Sección INICIO con 3 bloques -->
+      <!-- Sección INICIO            -->
       <!-- ========================= -->
       <section id="inicio" class="content-section active">
-        <div class="hero-text">
-          <span class="hero-highlight">AoE2 Verify</span> permite detectar cuentas Smurf o familiares, extraer masivamente la data de jugadores para torneos y a los Casters les ofrece información consolidada de todos los jugadores de una partida, todo desde un solo lugar.
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow"><i></i>Age of Empires II · Herramientas para la comunidad</span>
+            <h1 class="hero-title">Verifica a los jugadores. <span>Analiza cada partida.</span></h1>
+            <p class="hero-text">
+              AoE2 Verify detecta cuentas smurf o familiares, extrae masivamente la data de los jugadores para torneos y ofrece a los casters la información consolidada de todos los jugadores de una partida, todo desde un solo lugar.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#" data-section="casterBuscar">Dashboard para casters
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+              <a class="btn btn-ghost" href="#" data-section="smurf">Buscar cuentas smurf</a>
+            </div>
+          </div>
+
+          <div class="hero-preview" aria-hidden="true">
+            <div class="card preview-card">
+              <div class="preview-head">
+                <div><strong>Arabia</strong><small>Team Random Map · 2 vs 2</small></div>
+                <span class="live"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>EN VIVO</span>
+              </div>
+              <div class="preview-team">
+                <span class="label">Equipo 1</span>
+                <div class="mini"><span class="stripe" style="background:#3B82F6"></span><span class="civ"><img src="https://backend.cdn.aoe2companion.com/public/aoe2/de/civilizations/franks.png" alt="Francos" title="Francos" /></span><div class="mini-body"><div class="mini-line"><span>Valdivia</span><span class="num">1612</span></div><div class="track"><div class="fill" style="width:67%"></div></div></div></div>
+                <div class="mini"><span class="stripe" style="background:#EF4444"></span><span class="civ"><img src="https://backend.cdn.aoe2companion.com/public/aoe2/de/civilizations/britons.png" alt="Británicos" title="Británicos" /></span><div class="mini-body"><div class="mini-line"><span>Rayen</span><span class="num">1485</span></div><div class="track"><div class="fill" style="width:53%"></div></div></div></div>
+              </div>
+              <div class="preview-sep"></div>
+              <div class="preview-team">
+                <span class="label">Equipo 2</span>
+                <div class="mini"><span class="stripe" style="background:#22C55E"></span><span class="civ"><img src="https://backend.cdn.aoe2companion.com/public/aoe2/de/civilizations/mongols.png" alt="Mongoles" title="Mongoles" /></span><div class="mini-body"><div class="mini-line"><span>Pizarro</span><span class="num">1550</span></div><div class="track"><div class="fill" style="width:60%"></div></div></div></div>
+                <div class="mini"><span class="stripe" style="background:#EAB308"></span><span class="civ"><img src="https://backend.cdn.aoe2companion.com/public/aoe2/de/civilizations/mayans.png" alt="Mayas" title="Mayas" /></span><div class="mini-body"><div class="mini-line"><span>Lautaro</span><span class="num">1433</span></div><div class="track"><div class="fill" style="width:47%"></div></div></div></div>
+              </div>
+              <div class="preview-note">Vista de ejemplo</div>
+            </div>
+          </div>
         </div>
 
         <div class="services-container">
           <!-- Servicio 1 -->
-          <div class="service-card fade-in">
-            <img src="Img/01 Smurf.png" alt="Cuentas Smurf" class="service-img" />
-            <h2>Buscar cuentas Smurf</h2>
-            <p>
-              Descubre si un jugador tiene cuentas smurf, alternas o familiares. AoE2 Verify te mostrará todas las cuentas vinculadas a su perfil principal de forma automática.
-            </p>
-            <button class="card-btn" data-section="smurf">Abrir</button>
-          </div>
+          <a class="card service-card" href="#" data-section="smurf">
+            <div class="service-top">
+              <span class="service-icon cy"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 13.8c1.8.7 3 2.4 3 5.2"/></svg></span>
+              <h2>Buscar cuentas smurf</h2>
+            </div>
+            <p>Descubre si un jugador tiene cuentas smurf, alternas o familiares. Verás todas las cuentas vinculadas a su perfil principal de forma automática.</p>
+            <span class="service-open cy">Abrir <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </a>
 
           <!-- Servicio 2 -->
-          <div class="service-card fade-in">
-            <img src="Img/02 Listado.png" alt="Herramientas de torneos" class="service-img" />
-            <h2>Extraer data de jugadores</h2>
-            <p>
-              Herramienta para organizadores de torneos que extrae masivamente los ELOS y número de partidas para 1v1 y TG, nacionalidad y clan. ¡Incluso detecta posibles cuentas Smurf!
-            </p>
-            <button class="card-btn" data-section="jugadores">Abrir</button>
-          </div>
+          <a class="card service-card" href="#" data-section="jugadores">
+            <div class="service-top">
+              <span class="service-icon mint"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M3.5 15h17M9.5 10v9.5"/></svg></span>
+              <h2>Extraer data de jugadores</h2>
+            </div>
+            <p>Para organizadores de torneos: extrae masivamente el ELO y las partidas en 1v1 y TG, la nacionalidad y el clan. Incluso detecta posibles cuentas smurf.</p>
+            <span class="service-open mint">Abrir <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </a>
 
           <!-- Servicio 3 -->
-          <div class="service-card fade-in">
-            <img src="Img/03 Caster.png" alt="Herramientas para casters" class="service-img" />
-            <h2>Dashboard para casters</h2>
-            <p>
-              Analiza los jugadores de una partida: sus elos, estadísticas, mapas y civilizaciones preferidas, además de las probabilidades de victoria. Todo lo que un caster necesita.
-            </p>
-            <button class="card-btn" data-section="casterBuscar">Abrir</button>
-          </div>
+          <a class="card service-card" href="#" data-section="casterBuscar">
+            <div class="service-top">
+              <span class="service-icon gold"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg></span>
+              <h2>Dashboard para casters</h2>
+            </div>
+            <p>Analiza a los jugadores de una partida: sus ELO, estadísticas, mapas y civilizaciones preferidas. Todo lo que un caster necesita.</p>
+            <span class="service-open gold">Abrir <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </a>
         </div>
       </section>
 
-      <!-- ========================= -->
-      <!-- Secciones originales intactas -->
-      <!-- ========================= -->
-      <section id="smurf" class="content-section">
-        <h1>Buscar cuentas smurf</h1>
-        <p>Aquí podrás detectar posibles cuentas alternas y comparar perfiles.</p>
-      </section>
-
-      <section id="jugadores" class="content-section">
-        <h1>Consulta de jugadores</h1>
-        <p>Busca jugadores por nombre o ID para ver sus estadísticas y actividad reciente.</p>
-      </section>
-
-      <section id="casterBuscar" class="content-section">
-        <h1>🔧 Estamos trabajando en la busqueda de jugadores</h1>
-        <p>Esto es la busqueda</p>
-      </section>
-
-      <section id="caster" class="content-section">
-        <h1>🔧 Estamos trabajando en esta funcionalidad de Caster</h1>
-        <p>La sección de información para casters estará disponible muy pronto. 
-        ¡Estamos ultimando detalles para llevarte una herramienta increíble!</p>
-      </section>
+      <!-- Las demás secciones se construyen desde su script al abrirlas -->
+      <section id="smurf" class="content-section"></section>
+      <section id="jugadores" class="content-section"></section>
+      <section id="casterBuscar" class="content-section"></section>
+      <section id="caster" class="content-section"></section>
     </div>
   </main>
 

@@ -31,44 +31,51 @@ function initCasterBuscarSection() {
   if (!section) return;
 
   section.innerHTML = `
-    <div class="caster-header">
-      <h2 class="caster-title">Dashboard para Casters</h2>
-      <p class="caster-subtitle"></p>
+    <div class="page-head">
+      <h2 class="page-title">Dashboard para Casters</h2>
+      <p class="page-sub">Busca a un jugador para ver su partida actual o la más reciente.</p>
     </div>
 
-    <div class="caster-search">
-      <div class="caster-input-group">
-        <input
-          type="text"
-          id="casterInput"
-          class="caster-input"
-          placeholder="Escribe un nombre de jugador..."
-          autocomplete="off"
-        />
-      </div>
+    <div class="caster-layout">
+      <aside class="caster-side">
+        <div class="field caster-search">
+          ${icono("search", 20)}
+          <input
+            type="text"
+            id="casterInput"
+            class="input"
+            placeholder="Escribe un nombre de jugador..."
+            aria-label="Nombre del jugador"
+            autocomplete="off"
+          />
+        </div>
+
+        <div id="casterResults" class="card caster-results"></div>
+
+        <div class="card auto-monitor">
+          <label>
+            <input type="checkbox" id="autoMonitorCheck" disabled />
+            Buscar nuevas partidas cada
+          </label>
+          <select id="autoMonitorSelect" aria-label="Intervalo de búsqueda" disabled>
+            <option value="5" selected>5 segundos</option>
+            <option value="10">10 segundos</option>
+            <option value="20">20 segundos</option>
+            <option value="30">30 segundos</option>
+            <option value="60">60 segundos</option>
+          </select>
+          <div id="autoMonitorIndicator" class="auto-monitor-indicator" style="display:none;">
+            <div class="spinner-circle"></div>
+            <span class="countdown">0</span>
+          </div>
+        </div>
+      </aside>
+
+      <section class="caster-main">
+        <div id="casterMatchesContainer" class="caster-matches-container" style="display:none;"></div>
+        <div class="caster-empty">Busca a un jugador para ver aquí su partida actual o la más reciente.</div>
+      </section>
     </div>
-
-    <div id="casterResults" class="caster-results"></div>
-
-    <div class="auto-monitor">
-      <label>
-        <input type="checkbox" id="autoMonitorCheck" disabled />
-        Buscar nuevas partidas cada:
-      </label>
-      <select id="autoMonitorSelect" disabled>
-        <option value="5" selected>5 segundos</option>
-        <option value="10">10 segundos</option>
-        <option value="20">20 segundos</option>
-        <option value="30">30 segundos</option>
-        <option value="60">60 segundos</option>
-      </select>
-      <div id="autoMonitorIndicator" class="auto-monitor-indicator" style="display:none;">
-        <div class="spinner-circle"></div>
-        <span class="countdown">0</span>
-      </div>
-    </div>
-
-    <div id="casterMatchesContainer" class="caster-matches-container" style="display:none;"></div>
   `;
 
   casterInput = document.querySelector("#casterInput");
@@ -275,7 +282,7 @@ function eliminarBusquedaReciente(profileId) {
   }
 }
 
-function renderBusquedasRecientes() {
+function renderBusquedasRecientes(retardoEnVivoMs = 400) {
   if (!casterResults) return;
 
   const recientes = obtenerBusquedasRecientes();
@@ -293,7 +300,7 @@ function renderBusquedasRecientes() {
   frag.appendChild(lista);
 
   const label = document.createElement("div");
-  label.className = "recent-searches-label";
+  label.className = "recent-searches-label label";
   label.textContent = "Búsquedas recientes";
   lista.appendChild(label);
 
@@ -301,11 +308,13 @@ function renderBusquedasRecientes() {
     const row = document.createElement("div");
     row.className = "search-row recent-row";
     row.dataset.profileId = r.profileId;
+    // La fila del jugador que se está viendo queda resaltada
+    if (String(r.profileId) === String(selectedCasterProfileId)) row.classList.add("sel");
     // Una sola línea: nombre (con etiqueta "EN VIVO" si aplica) a la izquierda, ID y "×" al final
     row.innerHTML = `
       <span class="live-badge" hidden role="img" title="En vivo" aria-label="En vivo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="lb-onda lb-onda2" d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/><path class="lb-onda" d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></span>
       <div class="sr-name">${escapeHtml(r.name)}</div>
-      <div class="sr-right">ID: ${r.profileId}</div>
+      <div class="sr-right">ID ${r.profileId}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
     row.addEventListener("click", () =>
@@ -334,7 +343,7 @@ function renderBusquedasRecientes() {
       actualizarEnVivoRecientes();
       iniciarRefrescoEnVivo();
     }
-  }, 400);
+  }, retardoEnVivoMs);
 }
 
 // =============================
@@ -392,7 +401,7 @@ function renderCasterSearchResults(profiles) {
       p.clan || "-"
     }</div>
       </div>
-      <div class="sr-right">ID: ${p.profileId}</div>
+      <div class="sr-right">ID ${p.profileId}</div>
     `;
     row.addEventListener("click", () =>
       seleccionarJugadorCaster(p.profileId, p.name)
@@ -419,7 +428,10 @@ function seleccionarJugadorCaster(profileId, playerName) {
 
   selectedCasterProfileId = profileId;
   casterInput.value = playerName;
-  casterResults.innerHTML = "";
+  // El historial sigue visible (con el jugador elegido resaltado). La primera
+  // consulta de "EN VIVO" espera un poco para no competir con la carga de
+  // la partida por el límite de peticiones de la API.
+  renderBusquedasRecientes(5000);
 
   const autoMonitorContainer = document.querySelector(".auto-monitor");
   const autoMonitorCheck = document.getElementById("autoMonitorCheck");
@@ -783,79 +795,56 @@ function renderCasterMatch() {
     winnerTeam = "team2";
   }
 
-
   // 🔹 Ordenar equipos por color numérico
   team1 = team1.sort((a, b) => (a.color ?? 0) - (b.color ?? 0));
   team2 = team2.sort((a, b) => (a.color ?? 0) - (b.color ?? 0));
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "results-layout";
+  const enVivo = !match.finished && currentPage === 0;
+  const modo = [match.leaderboardName, match.gameModeName].filter(Boolean).join(" · ");
 
-  // 🔹 Contenedor de mapa dividido en 2 columnas con título centrado arriba
-const mapBox = document.createElement("div");
-mapBox.className = "info-box match-info";
-mapBox.innerHTML = `
-  <h3 class="info-title">Información de la partida</h3>
-  <div class="map-layout">
-    <div class="map-left">
-      <img src="${match.mapImageUrl}" alt="${match.mapName}" class="map-img" />
-    </div>
-    <div class="map-right">
-      <div>${match.mapName}</div>
-      <div>${match.leaderboardName}</div>
-      <div>${match.gameModeName}</div>
-      <div>
-        ${formatearFechaLocal(match.started)}
-        ${
-          (!match.finished && currentPage === 0)
-            ? '<div><span class="live-indicator">EN VIVO</span></div>'
-            : ''
-        }
+  const card = document.createElement("section");
+  card.className = "card match-card";
+  card.innerHTML = `
+    <div class="match-head">
+      <div class="map-thumb">${match.mapImageUrl ? `<img src="${match.mapImageUrl}" alt="${escapeHtml(match.mapName || "")}" />` : icono("map", 34)}</div>
+      <div class="match-info">
+        <div class="match-title">
+          <h2>${escapeHtml(match.mapName || "-")}</h2>
+          ${enVivo ? `<span class="live">${icono("wave", 15, 'class="w"')}EN VIVO</span>` : ""}
+        </div>
+        <span class="match-sub">${escapeHtml(modo)}</span>
+        <span class="match-date">Inicio: ${formatearFechaLocal(match.started)}</span>
       </div>
     </div>
-  </div>
-`;
+    <div class="match-teams"></div>
+    <div class="match-foot"></div>
+  `;
 
+  const equipos = card.querySelector(".match-teams");
+  equipos.appendChild(createTeamBox("Equipo 1", team1, winnerTeam === "team1"));
+  equipos.appendChild(createTeamBox("Equipo 2", team2, winnerTeam === "team2"));
 
-const team1Box = createTeamBox("Equipo 1", team1, winnerTeam === "team1");
-const team2Box = createTeamBox("Equipo 2", team2, winnerTeam === "team2");
-
-
-  wrapper.appendChild(mapBox);
-  wrapper.appendChild(team1Box);
-  wrapper.appendChild(team2Box);
-
-    // Contenedor combinado para paginación + botón dashboard
-  const paginationContainer = document.createElement("div");
-  paginationContainer.className = "pagination-container";
-
+  // Paginación + botón del dashboard
   const pagination = document.createElement("div");
   pagination.className = "pagination";
   pagination.innerHTML = `
-    <button ${currentPage === 0 ? "disabled" : ""} id="prevPage">← Anterior</button>
-    <span>Partida ${currentPage + 1} de ${currentMatches.length}</span>
-    <button ${
-      currentPage === currentMatches.length - 1 ? "disabled" : ""
-    } id="nextPage">Siguiente →</button>
+    <button class="btn btn-ghost compact" id="prevPage" aria-label="Partida anterior" ${currentPage === 0 ? "disabled" : ""}>${icono("chevL", 18)}</button>
+    <span>Partida <b>${currentPage + 1}</b> de <b>${currentMatches.length}</b></span>
+    <button class="btn btn-ghost compact" id="nextPage" aria-label="Partida siguiente" ${currentPage === currentMatches.length - 1 ? "disabled" : ""}>${icono("chevR", 18)}</button>
   `;
 
   const dashboardButton = document.createElement("button");
   dashboardButton.id = "btnDashboard";
-  dashboardButton.className = "btn-dashboard";
-  dashboardButton.textContent = "Ver dashboard";
+  dashboardButton.type = "button";
+  dashboardButton.className = "btn btn-primary btn-dashboard";
+  dashboardButton.innerHTML = `Ver dashboard ${icono("arrow", 18)}`;
   dashboardButton.addEventListener("click", () => abrirDashboard(match));
 
+  const pie = card.querySelector(".match-foot");
+  pie.appendChild(pagination);
+  pie.appendChild(dashboardButton);
 
-
-
-
-
-  paginationContainer.appendChild(pagination);
-  paginationContainer.appendChild(dashboardButton);
-
-  casterContainer.appendChild(wrapper);
-  casterContainer.appendChild(paginationContainer);
-
+  casterContainer.appendChild(card);
 
   document.getElementById("prevPage")?.addEventListener("click", () => {
     if (currentPage > 0) {
@@ -872,30 +861,30 @@ const team2Box = createTeamBox("Equipo 2", team2, winnerTeam === "team2");
 }
 
 // =============================
-// Crear tarjeta de equipo
+// Crear columna de equipo
 // =============================
 function createTeamBox(title, players, isWinner = false) {
   const box = document.createElement("div");
-  box.className = "info-box team";
+  box.className = "team-col";
 
   // 🔹 Agregar corona si el equipo ganó
-  const crown = isWinner ? ' <img src="Img/crown.png" alt="Ganador" class="winner-crown">' : "";
+  const crown = isWinner ? '<img src="Img/crown.png" alt="Ganador" class="winner-crown">' : "";
 
-  box.innerHTML = `<h3 class="info-title">${title}${crown}</h3>`;
+  box.innerHTML = `<div class="team-title label">${title}${crown}</div>`;
   players.forEach((p) => {
     const card = document.createElement("div");
     card.className = "team-card";
     card.innerHTML = `
       <div class="player-left">
         <div class="player-color" style="background:${p.colorHex}"></div>
-        <img src="${p.civImageUrl}" alt="${p.civName}" class="civ-logo" title="${p.civName}" />
+        <span class="civ">${p.civImageUrl ? `<img src="${p.civImageUrl}" alt="${escapeHtml(p.civName || "")}" class="civ-logo" title="${escapeHtml(p.civName || "")}" />` : ""}</span>
         <div class="player-meta">
           <div class="player-name">${escapeHtml(p.name)}</div>
           <div class="player-clan">${escapeHtml(p.clan || "")}</div>
         </div>
       </div>
       <div class="player-elo" title="Elo partida">${escapeHtml(p.rating)}</div>
-`;
+    `;
     box.appendChild(card);
   });
   return box;

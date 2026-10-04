@@ -7,36 +7,34 @@ function initJugadoresSection() {
   if (!jugadoresSection) return;
 
   jugadoresSection.innerHTML = `
-    <div class="smurf-header">
-      <h2 class="smurf-title">Extraer data de jugadores</h2>
-      <p class="smurf-subtitle"></p>
+    <div class="page-head">
+      <h2 class="page-title">Extraer data de jugadores</h2>
+      <p class="page-sub">Para organizadores de torneos: importa códigos Companion y descarga todo en un CSV.</p>
     </div>
 
     <div class="validacion-root">
-      <div class="validacion-buttons">
-        <button id="btnImportar" class="card-btn">Importar…</button>
-        <button id="btnExportar" class="card-btn" disabled>Exportar</button>
-      </div>
+      <div class="card validacion-top">
+        <div class="validacion-toolbar">
+          <ol class="steps">
+            <li><span>1</span>Un código Companion por línea (.txt)</li>
+            <li><span>2</span>Máximo 100 jugadores</li>
+            <li><span>3</span>Exporta el resultado a CSV</li>
+          </ol>
+          <div class="validacion-buttons">
+            <button id="btnImportar" class="btn btn-primary" type="button">${icono("upload", 18)}Importar .txt</button>
+            <button id="btnExportar" class="btn btn-ghost" type="button" disabled>${icono("download", 18)}Exportar CSV</button>
+          </div>
+        </div>
 
-      <div class="progress-area" id="progressArea" style="display:none;">
-        <div class="progress-text" id="progressText">Procesando: 0 / 0</div>
-        <div class="progress-bar-outer">
-          <div class="progress-bar-inner" id="progressInner" style="width:0%"></div>
+        <div class="progress-area" id="progressArea">
+          <div class="progress-text" id="progressText">Procesando: 0 / 0</div>
+          <div class="progress-bar-outer">
+            <div class="progress-bar-inner" id="progressInner" style="width:0%"></div>
+          </div>
         </div>
       </div>
 
-      <!-- 🔹 Mensaje explicativo -->
-      <div id="mensajeInstrucciones" class="validacion-info-box">
-        <p>
-          🧩 <strong>Instrucciones de uso:</strong><br>
-          Herramienta diseñada para <strong>organizadores de torneos</strong> que permite <strong>extraer masivamente la información de jugadores</strong> a partir de un <strong>archivo de texto plano (.txt)</strong>.<br><br>
-          El archivo debe contener <strong>un código de jugador "Código Companion" por cada línea (Máximo 100 jugadores)</strong>.<br><br>
-          Por cada jugador, se extraerá la siguiente información:<br>
-          <strong>Nickname</strong>, <strong>Código Companion</strong>, <strong>País</strong>, <strong>Clan</strong>, <strong>Elo 1v1 actual</strong>, <strong>Elo 1v1 máximo alcanzado</strong>, <strong>Total de partidas 1v1</strong>, <strong>Partidas ganadas 1v1</strong>, <strong>Elo TG actual</strong>, <strong>Elo TG máximo alcanzado</strong>, <strong>Total de partidas TG</strong>, <strong>Partidas ganadas TG</strong> y la <strong>lista de cuentas Smurf</strong> asociadas al jugador.
-        </p>
-      </div>
-
-      <div id="validacionTableWrap" class="validacion-table-container"></div>
+      <div id="validacionTableWrap" class="card validacion-table-container"></div>
     </div>
   `;
 
@@ -68,10 +66,13 @@ function initJugadoresSection() {
     table.innerHTML = `
       <thead>
         <tr>
-          <th>#</th><th>Nick</th><th>Código Companion</th><th>País</th><th>Clan</th>
-          <th>Elo 1v1</th><th>Elo Máx 1v1</th><th>Partidas 1v1</th><th>Ganadas 1v1</th>
-          <th>Elo TG</th><th>Elo Máx TG</th><th>Partidas TG</th><th>Ganadas TG</th>
-          <th>Cuentas Smurf</th>
+          <th rowspan="2">#</th><th rowspan="2">Nick</th><th rowspan="2">Código Companion</th><th rowspan="2">País</th><th rowspan="2">Clan</th>
+          <th class="grp" colspan="4">1v1</th><th class="grp g" colspan="4">Team Game</th>
+          <th rowspan="2">Cuentas Smurf</th>
+        </tr>
+        <tr>
+          <th class="r">ELO</th><th class="r">Máx.</th><th class="r">Partidas</th><th class="r">Ganadas</th>
+          <th class="r">ELO</th><th class="r">Máx.</th><th class="r">Partidas</th><th class="r">Ganadas</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -97,13 +98,17 @@ function initJugadoresSection() {
             class="companion-link">${escapeHtml(r.companion)}</a>`
       : "";
 
-    // 🔹 Generar enlaces para las cuentas smurf (si existen)
-    const smurfLinks = (r.smurfsList || [])
-      .map(id => `<a href="https://aoe2companion.com/profile/${id}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="companion-link">${escapeHtml(id)}</a>`)
-      .join(", ");
+    // 🔹 Cuentas smurf: un resumen ("N cuentas") que se despliega con los
+    // enlaces de todas ellas (puede haber varias)
+    const listaSmurf = r.smurfsList || [];
+    const smurfLinks = listaSmurf.length
+      ? `<details class="smurf-ids">
+           <summary class="chip gold">${icono("warn", 13)}${listaSmurf.length} ${listaSmurf.length === 1 ? "cuenta" : "cuentas"}</summary>
+           <div class="ids">${listaSmurf
+             .map(id => `<a href="https://aoe2companion.com/profile/${id}" target="_blank" rel="noopener noreferrer" class="companion-link">${escapeHtml(id)}</a>`)
+             .join("")}</div>
+         </details>`
+      : '<span class="smurf-none">—</span>';
 
     tr.innerHTML = `
       <td>${i + 1}</td>
@@ -111,14 +116,14 @@ function initJugadoresSection() {
       <td>${enlaceCompanion}</td>
       <td>${escapeHtml(r.pais || "")}</td>
       <td>${escapeHtml(r.clan || "")}</td>
-      <td>${r.elo1v1 ?? ""}</td>
-      <td>${r.max1v1 ?? ""}</td>
-      <td>${r.games1v1 ?? ""}</td>
-      <td>${r.wins1v1 ?? ""}</td>
-      <td>${r.eloTG ?? ""}</td>
-      <td>${r.maxTG ?? ""}</td>
-      <td>${r.gamesTG ?? ""}</td>
-      <td>${r.winsTG ?? ""}</td>
+      <td class="r num">${r.elo1v1 ?? ""}</td>
+      <td class="r num">${r.max1v1 ?? ""}</td>
+      <td class="r num">${r.games1v1 ?? ""}</td>
+      <td class="r num">${r.wins1v1 ?? ""}</td>
+      <td class="r num">${r.eloTG ?? ""}</td>
+      <td class="r num">${r.maxTG ?? ""}</td>
+      <td class="r num">${r.gamesTG ?? ""}</td>
+      <td class="r num">${r.winsTG ?? ""}</td>
       <td>${smurfLinks}</td>
     `;
 
@@ -212,7 +217,7 @@ function initJugadoresSection() {
       if (lines.length === 0) return finalizarProceso("El archivo está vacío.");
 
       const total = Math.min(100, lines.length);
-      progressArea.style.display = "block";
+      progressArea.style.display = "flex";
       progressInner.style.width = "0%";
       progressText.textContent = `Procesando: 0 / ${total}`;
 
