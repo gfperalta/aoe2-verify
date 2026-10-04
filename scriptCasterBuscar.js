@@ -132,7 +132,7 @@ function initCasterBuscarSection() {
 // Búsquedas recientes (se guardan en el navegador)
 // =============================
 const RECENT_SEARCHES_KEY = "aoe2verify_casterRecentSearches";
-const MAX_RECENT_SEARCHES = 10;
+const MAX_RECENT_SEARCHES = 20;
 
 function obtenerBusquedasRecientes() {
   try {
@@ -174,6 +174,7 @@ const EN_VIVO_TTL_ERROR_MS = 10000;  // tras un error, esperar antes de reintent
 const EN_VIVO_REFRESCO_MS = 30000;   // cada cuánto se refresca la lista visible
 const EN_VIVO_MAX_HORAS = 4;         // una partida "sin fin" más vieja se considera abandonada
 const EN_VIVO_LOTE = 4;              // consultas simultáneas
+const EN_VIVO_PAUSA_MS = 3000;       // espera entre lotes (con 20 jugadores evita superar el límite de la API)
 const enVivoCache = new Map();       // profileId -> { live, ts, error }
 const enVivoPendiente = new Set();
 let enVivoTimer = null;
@@ -239,6 +240,8 @@ async function actualizarEnVivoRecientes() {
         })
       );
       aplicarEnVivo();
+      // Pausa entre lotes para repartir las consultas en el tiempo
+      if (!pausar && i + EN_VIVO_LOTE < ids.length) await sleep(EN_VIVO_PAUSA_MS);
     }
   } finally {
     enVivoEnCurso = false;
