@@ -65,6 +65,26 @@ function arreglarPlural(n, singular, plural) {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
+// Bloque de texto de UN jugador (sin el "* " inicial): su cuenta actual, cuántas
+// cuentas smurf tiene y, debajo, las que superan su ELO 1v1. null si no hay ninguna.
+function bloqueSmurfsJugador(jugador, smurfData) {
+  const cuentas = smurfData?.cuentas;
+  if (!Array.isArray(cuentas) || cuentas.length <= 1) return null;
+
+  const [actual, ...otras] = cuentas;
+  const eloActual = Number(actual?.elo1v1) || 0;
+  const superiores = otras
+    .filter((c) => (Number(c?.elo1v1) || 0) > eloActual)
+    .sort((a, b) => (Number(b.elo1v1) || 0) - (Number(a.elo1v1) || 0));
+  if (!superiores.length) return null;
+
+  const nombre = jugador?.name || actual?.nombre || "Jugador";
+  return [
+    `${nombre} tiene ${arreglarPlural(otras.length, "cuenta smurf", "cuentas smurf")}`,
+    ...superiores.map((c) => `${c.nombre || "Desconocido"} ${c.elo1v1}`),
+  ].join("\n");
+}
+
 function textoSmurfsRivales(datos) {
   const buscadoId = typeof lastCasterSearch !== "undefined" ? lastCasterSearch?.profileId : null;
   const equipos = datos?.teams || [];
@@ -76,22 +96,8 @@ function textoSmurfsRivales(datos) {
 
   for (const jugador of rivales) {
     const smurfData = (datos.Smurf || []).find((x) => x.jugadorId === jugador.profileId);
-    const cuentas = smurfData?.cuentas;
-    if (!Array.isArray(cuentas) || cuentas.length <= 1) continue;
-
-    const [actual, ...otras] = cuentas;
-    const eloActual = Number(actual?.elo1v1) || 0;
-    const superiores = otras
-      .filter((c) => (Number(c?.elo1v1) || 0) > eloActual)
-      .sort((a, b) => (Number(b.elo1v1) || 0) - (Number(a.elo1v1) || 0));
-    if (!superiores.length) continue;
-
-    const nombre = jugador.name || actual?.nombre || "Jugador";
-    const lineas = [
-      `${nombre} tiene ${arreglarPlural(otras.length, "cuenta smurf", "cuentas smurf")}`,
-      ...superiores.map((c) => `${c.nombre || "Desconocido"} ${c.elo1v1}`),
-    ];
-    bloques.push(lineas.join("\n"));
+    const bloque = bloqueSmurfsJugador(jugador, smurfData);
+    if (bloque) bloques.push(bloque);
   }
 
   return { texto: bloques.length ? "* " + bloques.join("\n\n") : "", jugadores: bloques.length };
@@ -175,9 +181,9 @@ function pintarCeldaSmurf(td, p) {
         <span class="smurf-alerta-nombre">${escapeHtml(nombreCuenta)}</span>
         <span class="smurf-alerta-elo">${escapeHtml(eloCuenta)} (${analisisSmurf.totalSmurfs})</span>
       `;
-      const textoTotalSmurfs = analisisSmurf.totalSmurfs === 1 ? "cuenta smurf" : "cuentas smurf";
-      // El "* " del inicio hace que el chat del juego envíe el mensaje a todos
-      textoParaCopiar = `* ${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
+      // Misma estructura que el copiado de todos los rivales, pero solo con este
+      // jugador. El "* " del inicio hace que el chat del juego lo envíe a todos.
+      textoParaCopiar = "* " + bloqueSmurfsJugador(p, smurfData);
     } else {
       span.textContent = "Sí";
     }
