@@ -46,6 +46,11 @@ function analizarCuentasSmurf(smurfData) {
   };
 }
 
+// Celdas de la columna "Cuentas Smurf": se rellenan a medida que llegan los datos
+const celdasSmurf = new Map(); // profileId -> { td, p }
+let copiadoMatchId = null;     // partida cuyo texto de smurfs rivales ya se copió
+let copiaPendiente = null;     // { texto, mensaje } si el navegador aún no dejó copiar
+
 // ==================================================
 // Texto para pegar en el chat del juego: cuentas smurf superiores de los rivales
 // ==================================================
@@ -54,8 +59,8 @@ function analizarCuentasSmurf(smurfData) {
 // se arma, por jugador:
 //   * <cuenta actual> tiene N cuentas smurf
 //   * <smurf> <ELO>            (solo las que superan a la cuenta actual)
-// Entre un jugador y otro va una línea en blanco. El "* " del inicio de cada
-// línea hace que el chat del juego envíe el mensaje a todos.
+// Entre un jugador y otro va una línea en blanco. El "* " va solo al principio
+// de todo el texto (primera línea): hace que el chat del juego lo envíe a todos.
 function arreglarPlural(n, singular, plural) {
   return `${n} ${n === 1 ? singular : plural}`;
 }
@@ -86,10 +91,199 @@ function textoSmurfsRivales(datos) {
       `${nombre} tiene ${arreglarPlural(otras.length, "cuenta smurf", "cuentas smurf")}`,
       ...superiores.map((c) => `${c.nombre || "Desconocido"} ${c.elo1v1}`),
     ];
-    bloques.push(lineas.map((l) => `* ${l}`).join("\n"));
+    bloques.push(lineas.join("\n"));
   }
 
-  return { texto: bloques.join("\n\n"), jugadores: bloques.length };
+  return { texto: bloques.length ? "* " + bloques.join("\n\n") : "", jugadores: bloques.length };
+}
+
+// Copia al portapapeles. Si el navegador no lo permite en este momento (por
+// ejemplo porque estás en la ventana del juego y no en la página), se guarda
+// y se copia solo en cuanto vuelves a la página.
+async function copiarAlPortapapeles(texto, mensajeOk) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    copiaPendiente = null;
+    mostrarToast(mensajeOk, 5000);
+  } catch {
+    copiaPendiente = { texto, mensaje: mensajeOk };
+  }
+}
+
+["focus", "click", "keydown", "pointerdown"].forEach((evento) =>
+  window.addEventListener(evento, () => {
+    if (!copiaPendiente) return;
+    const { texto, mensaje } = copiaPendiente;
+    copiaPendiente = null;
+    copiarAlPortapapeles(texto, mensaje);
+  }, true)
+);
+
+// Cuando ya se conocen las cuentas smurf de todos, deja en el portapapeles el
+// texto de los rivales, sin que haya que pulsar nada.
+function copiarSmurfsRivalesAuto(match) {
+  if (!match || copiadoMatchId === match.matchId) return;
+  copiadoMatchId = match.matchId;
+
+  const r = textoSmurfsRivales(match);
+  if (r.error) return; // sin jugador buscado en la partida: no hay a quién considerar rival
+  if (!r.jugadores) {
+    mostrarToast("Ningún rival tiene cuentas smurf con más ELO 1v1 que la cuenta con la que juega.", 5000);
+    return;
+  }
+  copiarAlPortapapeles(
+    r.texto,
+    `Copiado en el portapapeles: ${arreglarPlural(r.jugadores, "rival con cuentas smurf superiores", "rivales con cuentas smurf superiores")}. Ya puedes pegarlo en el chat del juego.`
+  );
+}
+
+// Lo llama la carga de datos (scriptCasterBuscar.js) cada vez que llegan cuentas
+// smurf de un jugador, y al terminar con todos.
+function alActualizarSmurfs(match) {
+  if (!dashboardData || dashboardData.matchId !== match.matchId) return; // ya no se está viendo esta partida
+  celdasSmurf.forEach(({ td, p }) => {
+    if (td.dataset.estado === "buscando") pintarCeldaSmurf(td, p);
+  });
+  if (!match.smurfPendiente) copiarSmurfsRivalesAuto(match);
+}
+
+// Dibuja la celda de smurfs de un jugador: "Buscando…" mientras se buscan, y
+// después la etiqueta correspondiente.
+function pintarCeldaSmurf(td, p) {
+  td.innerHTML = "";
+  const smurfData = (dashboardData?.Smurf || []).find((s) => s.jugadorId === p.profileId);
+
+  if (!smurfData && dashboardData?.smurfPendiente) {
+    td.dataset.estado = "buscando";
+    td.innerHTML = `<span class="smurf-buscando">Buscando…</span>`;
+    return;
+  }
+  td.dataset.estado = "listo";
+  const analisisSmurf = analizarCuentasSmurf(smurfData);
+
+  if (analisisSmurf) {
+    const span = document.createElement("span");
+    span.className = "smurf-si";
+    span.title = "Ver cuentas relacionadas";
+
+    // 🔹 Si alguna cuenta smurf tiene un ELO 1v1 superior al de la cuenta
+    // con la que está jugando, mostramos su nombre + ELO (y el total de
+    // cuentas smurf entre paréntesis). Si no, mostramos simplemente "Sí".
+    let textoParaCopiar = null;
+    if (analisisSmurf.cuentaSuperior) {
+      const nombreCuenta = analisisSmurf.cuentaSuperior.nombre || "Desconocido";
+      const eloCuenta = analisisSmurf.cuentaSuperior.elo1v1 ?? 0;
+      span.classList.add("smurf-alerta");
+      span.innerHTML = `
+        ${icono("warn", 13)}
+        <span class="smurf-alerta-nombre">${escapeHtml(nombreCuenta)}</span>
+        <span class="smurf-alerta-elo">${escapeHtml(eloCuenta)} (${analisisSmurf.totalSmurfs})</span>
+      `;
+      const textoTotalSmurfs = analisisSmurf.totalSmurfs === 1 ? "cuenta smurf" : "cuentas smurf";
+      textoParaCopiar = `${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
+    } else {
+      span.textContent = "Sí";
+    }
+
+    span.addEventListener("click", (e) => {
+      e.stopPropagation();
+
+      // 🔹 Copiar al portapapeles el nombre y ELO de la cuenta smurf detectada
+      if (textoParaCopiar) {
+        navigator.clipboard.writeText(textoParaCopiar).catch(err =>
+          console.error("Error al copiar:", err)
+        );
+      }
+
+      // Obtener el panel y elementos internos
+      const drawer = document.querySelector(".smurf-drawer");
+      const drawerTable = drawer.querySelector(".smurf-drawer-table");
+      const empty = drawer.querySelector(".smurf-drawer-empty");
+
+      // Limpiar tabla anterior
+      drawerTable.innerHTML = "";
+      empty.style.display = "none";
+      drawerTable.classList.remove("hidden");
+
+      // Generar tabla de cuentas smurf
+      const cuentas = smurfData.cuentas || [];
+      if (!cuentas.length) {
+        empty.textContent = "No hay cuentas smurf registradas.";
+        empty.style.display = "block";
+        drawerTable.classList.add("hidden");
+      } else {
+        const etiquetas = {
+          n: "#", padre: "Cuenta padre", nombre: "Cuenta", pais: "País", id: "ID Companion",
+          elo1v1: "ELO 1v1", max1v1: "Máx 1v1", juegos1v1: "Juegos 1v1",
+          eloTG: "ELO TG", maxTG: "Máx TG", juegosTG: "Juegos TG",
+        };
+        const headers = Object.keys(cuentas[0]);
+        let html = "<thead><tr>";
+        // data-key conserva el nombre interno de la columna (se usa al copiar)
+        headers.forEach(h => html += `<th data-key="${h}">${etiquetas[h] || h}</th>`);
+        html += "</tr></thead><tbody>";
+
+        cuentas.forEach((c, idx) => {
+          html += "<tr>";
+          headers.forEach(h => {
+            let value = c[h];
+            // Detectar columnas ELO relevantes
+            const colKey = h.toLowerCase().replace(/\s+/g, '');
+            const isEloColumn = ["elo1v1", "maximo1v1", "elotg", "maximotg"].includes(colKey);
+            let cellClass = "";
+
+            if (idx > 0 && isEloColumn && !isNaN(parseFloat(value))) {
+              const ref = parseFloat(cuentas[0][h]);
+              const val = parseFloat(value);
+              if (val > ref) cellClass = "elo-higher"; // 🔹 resaltar el ELO mayor
+            }
+
+            html += `<td class="${cellClass}">${value}</td>`;
+          });
+          html += "</tr>";
+        });
+
+        html += "</tbody>";
+        drawerTable.innerHTML = html;
+
+        // Doble clic en celdas resaltadas -> copiar al portapapeles
+        drawerTable.querySelectorAll(".elo-higher").forEach((cell) => {
+          cell.addEventListener("dblclick", () => {
+            const row = cell.closest("tr");
+            const headersEls = Array.from(drawerTable.querySelectorAll("thead th"));
+            const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
+            const columnName = headersEls[colIndex]?.dataset.key || "Columna";
+            const value = cell.innerText?.trim() || "";
+
+            // Buscar la celda que contiene el nombre de la cuenta Smurf
+            let accountName = "Cuenta desconocida";
+            const allHeaders = headersEls.map(h => (h.dataset.key || "").toLowerCase().trim());
+            const nombreIndex = allHeaders.findIndex(h =>
+              h.includes("nombre") || h.includes("cuenta") || h.includes("smurf")
+            );
+
+            if (nombreIndex !== -1) {
+              accountName = row.children[nombreIndex]?.innerText?.trim() || accountName;
+            }
+
+            const message = `* Cuenta Smurf "${accountName}" – ${columnName}: ${value}`;
+
+            navigator.clipboard.writeText(message).then(() => {
+              // Efecto visual de confirmación
+              cell.classList.add("copied");
+              setTimeout(() => cell.classList.remove("copied"), 800);
+            }).catch(err => console.error("Error al copiar:", err));
+          });
+        });
+      }
+
+      // Abrir drawer
+      drawer.classList.add("open");
+    });
+    td.appendChild(span);
+  } else {
+    td.innerHTML = `<span class="smurf-none">Sin cuentas</span>`;
+  }
 }
 
 // ==================================================
@@ -137,7 +331,6 @@ function initCasterSection() {
         <button class="btn btn-modo" type="button" data-modo="partidas" aria-pressed="false">Partidas</button>
       </div>
 
-      <button class="btn btn-ghost btn-copiar-smurfs" type="button" title="Copia al portapapeles las cuentas smurf con más ELO 1v1 de los rivales, listas para pegar en el chat del juego">${icono("copy", 18)}Copiar smurfs rivales</button>
     </div>
     <div class="caster-root"></div>
   `;
@@ -149,6 +342,7 @@ function initCasterSection() {
   // Tablas de jugadores de ambos equipos
   // ==================================================
   const root = casterSection.querySelector(".caster-root");
+  celdasSmurf.clear();
 
   const match = dashboardData;
   const teams = match?.teams || [];
@@ -359,135 +553,11 @@ function initCasterSection() {
       row.appendChild(crearBarraElo(l1.rating, rango1v1));
       row.appendChild(crearCeldaEloMax(l1.maxRating));
 
-      // Columna: Smurf (después del ELO máximo)
+      // Columna: Smurf (después del ELO máximo). Se rellena cuando llegan los datos.
       const tdSmurf = document.createElement("td");
       tdSmurf.className = "col-smurf";
-      const smurfData = (dashboardData.Smurf || []).find(s => s.jugadorId === p.profileId);
-      const analisisSmurf = analizarCuentasSmurf(smurfData);
-
-      if (analisisSmurf) {
-        const span = document.createElement("span");
-        span.className = "smurf-si";
-        span.title = "Ver cuentas relacionadas";
-
-        // 🔹 Si alguna cuenta smurf tiene un ELO 1v1 superior al de la cuenta
-        // con la que está jugando, mostramos su nombre + ELO (y el total de
-        // cuentas smurf entre paréntesis). Si no, mostramos simplemente "Sí".
-        let textoParaCopiar = null;
-        if (analisisSmurf.cuentaSuperior) {
-          const nombreCuenta = analisisSmurf.cuentaSuperior.nombre || "Desconocido";
-          const eloCuenta = analisisSmurf.cuentaSuperior.elo1v1 ?? 0;
-          span.classList.add("smurf-alerta");
-          span.innerHTML = `
-            ${icono("warn", 13)}
-            <span class="smurf-alerta-nombre">${escapeHtml(nombreCuenta)}</span>
-            <span class="smurf-alerta-elo">${escapeHtml(eloCuenta)} (${analisisSmurf.totalSmurfs})</span>
-          `;
-          const textoTotalSmurfs = analisisSmurf.totalSmurfs === 1 ? "cuenta smurf" : "cuentas smurf";
-          textoParaCopiar = `${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
-        } else {
-          span.textContent = "Sí";
-        }
-
-        span.addEventListener("click", (e) => {
-          e.stopPropagation();
-
-          // 🔹 Copiar al portapapeles el nombre y ELO de la cuenta smurf detectada
-          if (textoParaCopiar) {
-            navigator.clipboard.writeText(textoParaCopiar).catch(err =>
-              console.error("Error al copiar:", err)
-            );
-          }
-
-          // Obtener el panel y elementos internos
-          const drawer = document.querySelector(".smurf-drawer");
-          const drawerTable = drawer.querySelector(".smurf-drawer-table");
-          const empty = drawer.querySelector(".smurf-drawer-empty");
-
-          // Limpiar tabla anterior
-          drawerTable.innerHTML = "";
-          empty.style.display = "none";
-          drawerTable.classList.remove("hidden");
-
-          // Generar tabla de cuentas smurf
-          const cuentas = smurfData.cuentas || [];
-          if (!cuentas.length) {
-            empty.textContent = "No hay cuentas smurf registradas.";
-            empty.style.display = "block";
-            drawerTable.classList.add("hidden");
-          } else {
-            const etiquetas = {
-              n: "#", padre: "Cuenta padre", nombre: "Cuenta", pais: "País", id: "ID Companion",
-              elo1v1: "ELO 1v1", max1v1: "Máx 1v1", juegos1v1: "Juegos 1v1",
-              eloTG: "ELO TG", maxTG: "Máx TG", juegosTG: "Juegos TG",
-            };
-            const headers = Object.keys(cuentas[0]);
-            let html = "<thead><tr>";
-            // data-key conserva el nombre interno de la columna (se usa al copiar)
-            headers.forEach(h => html += `<th data-key="${h}">${etiquetas[h] || h}</th>`);
-            html += "</tr></thead><tbody>";
-
-            cuentas.forEach((c, idx) => {
-              html += "<tr>";
-              headers.forEach(h => {
-                let value = c[h];
-                // Detectar columnas ELO relevantes
-                const colKey = h.toLowerCase().replace(/\s+/g, '');
-                const isEloColumn = ["elo1v1", "maximo1v1", "elotg", "maximotg"].includes(colKey);
-                let cellClass = "";
-
-                if (idx > 0 && isEloColumn && !isNaN(parseFloat(value))) {
-                  const ref = parseFloat(cuentas[0][h]);
-                  const val = parseFloat(value);
-                  if (val > ref) cellClass = "elo-higher"; // 🔹 resaltar el ELO mayor
-                }
-
-                html += `<td class="${cellClass}">${value}</td>`;
-              });
-              html += "</tr>";
-            });
-
-            html += "</tbody>";
-            drawerTable.innerHTML = html;
-
-            // Doble clic en celdas resaltadas -> copiar al portapapeles
-            drawerTable.querySelectorAll(".elo-higher").forEach((cell) => {
-              cell.addEventListener("dblclick", () => {
-                const row = cell.closest("tr");
-                const headersEls = Array.from(drawerTable.querySelectorAll("thead th"));
-                const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
-                const columnName = headersEls[colIndex]?.dataset.key || "Columna";
-                const value = cell.innerText?.trim() || "";
-
-                // Buscar la celda que contiene el nombre de la cuenta Smurf
-                let accountName = "Cuenta desconocida";
-                const allHeaders = headersEls.map(h => (h.dataset.key || "").toLowerCase().trim());
-                const nombreIndex = allHeaders.findIndex(h =>
-                  h.includes("nombre") || h.includes("cuenta") || h.includes("smurf")
-                );
-
-                if (nombreIndex !== -1) {
-                  accountName = row.children[nombreIndex]?.innerText?.trim() || accountName;
-                }
-
-                const message = `* Cuenta Smurf "${accountName}" – ${columnName}: ${value}`;
-
-                navigator.clipboard.writeText(message).then(() => {
-                  // Efecto visual de confirmación
-                  cell.classList.add("copied");
-                  setTimeout(() => cell.classList.remove("copied"), 800);
-                }).catch(err => console.error("Error al copiar:", err));
-              });
-            });
-          }
-
-          // Abrir drawer
-          drawer.classList.add("open");
-        });
-        tdSmurf.appendChild(span);
-      } else {
-        tdSmurf.innerHTML = `<span class="smurf-none">Sin cuentas</span>`;
-      }
+      celdasSmurf.set(p.profileId, { td: tdSmurf, p });
+      pintarCeldaSmurf(tdSmurf, p);
       row.appendChild(tdSmurf);
 
       row.appendChild(crearCeldaPartidas(l1.games, Math.round((l1.wins / l1.games) * 100) ));
@@ -548,24 +618,6 @@ function initCasterSection() {
   // ---- Listeners para los botones del encabezado ----
   const btnVolverBusqueda = casterSection.querySelector(".btn-volver-busqueda");
   const btnsModo = casterSection.querySelectorAll(".btn-modo");
-  const btnCopiarSmurfs = casterSection.querySelector(".btn-copiar-smurfs");
-
-  // Copia de una vez las cuentas smurf superiores de todos los rivales
-  if (btnCopiarSmurfs) {
-    btnCopiarSmurfs.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const r = textoSmurfsRivales(dashboardData);
-      if (r.error) return mostrarToast(r.error);
-      if (!r.jugadores) return mostrarToast("Ningún rival tiene cuentas smurf con más ELO 1v1 que la cuenta con la que juega.", 5000);
-      try {
-        await navigator.clipboard.writeText(r.texto);
-        mostrarToast(`Copiado: ${arreglarPlural(r.jugadores, "rival con cuentas smurf superiores", "rivales con cuentas smurf superiores")}. Ya puedes pegarlo en el chat del juego.`, 5000);
-      } catch (err) {
-        console.error("Error al copiar:", err);
-        mostrarToast("No se pudo copiar al portapapeles.");
-      }
-    });
-  }
 
   // Volver a la pantalla de búsqueda, restaurando el último jugador buscado
   if (btnVolverBusqueda) {
@@ -681,6 +733,11 @@ function initCasterSection() {
 
   // 🔹 Iniciar el monitoreo automático de nuevas partidas para este dashboard
   iniciarMonitoreoDashboard();
+
+  // 🔹 Cuentas smurf: si aún se están buscando (o la página se recargó a medias)
+  // se continúa en segundo plano; si ya estaban listas, se copia el texto de una vez.
+  if (dashboardData.smurfPendiente) cargarSmurfsPartida(dashboardData);
+  else copiarSmurfsRivalesAuto(dashboardData);
 }
 
 
@@ -804,7 +861,8 @@ async function verificarPartidaMasReciente(profileId) {
 
     mostrarToast("🔄 Se encontró una partida más reciente, actualizando dashboard...", 4000);
 
-    const matchCompleto = await construirDatosCompletosPartida(partidaMasReciente);
+    // Solo se espera a los jugadores; las cuentas smurf se siguen buscando después
+    const matchCompleto = await iniciarCargaPartida(partidaMasReciente).fase1;
 
     window.dashboardData = matchCompleto;
     sessionStorage.setItem("dashboardData", JSON.stringify(matchCompleto));
@@ -825,6 +883,9 @@ function destroyCasterSection() {
   console.log("🚪 Se salió de la sección Caster");
   detenerMonitoreoDashboard();
   dashboardData = null;
+  celdasSmurf.clear();
+  copiadoMatchId = null; // al volver a abrir la partida se vuelve a copiar
+  copiaPendiente = null;
   const casterSection = document.getElementById("caster");
   if (casterSection) casterSection.innerHTML = "";
 }
