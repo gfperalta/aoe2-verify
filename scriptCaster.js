@@ -176,7 +176,8 @@ function pintarCeldaSmurf(td, p) {
         <span class="smurf-alerta-elo">${escapeHtml(eloCuenta)} (${analisisSmurf.totalSmurfs})</span>
       `;
       const textoTotalSmurfs = analisisSmurf.totalSmurfs === 1 ? "cuenta smurf" : "cuentas smurf";
-      textoParaCopiar = `${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
+      // El "* " del inicio hace que el chat del juego envíe el mensaje a todos
+      textoParaCopiar = `* ${nombreCuenta} ${eloCuenta} (${analisisSmurf.totalSmurfs} ${textoTotalSmurfs})`;
     } else {
       span.textContent = "Sí";
     }
