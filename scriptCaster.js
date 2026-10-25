@@ -49,7 +49,7 @@ function analizarCuentasSmurf(smurfData) {
 // Celdas de la columna "Cuentas Smurf": se rellenan a medida que llegan los datos
 const celdasSmurf = new Map(); // profileId -> { td, p }
 let copiadoMatchId = null;     // partida cuyo texto de smurfs rivales ya se copió
-let copiaPendiente = null;     // { texto, mensaje } si el navegador aún no dejó copiar
+let copiaPendiente = null;     // texto que falta copiar si el navegador aún no dejó hacerlo
 
 // ==================================================
 // Texto para pegar en el chat del juego: cuentas smurf superiores de los rivales
@@ -97,25 +97,24 @@ function textoSmurfsRivales(datos) {
   return { texto: bloques.length ? "* " + bloques.join("\n\n") : "", jugadores: bloques.length };
 }
 
-// Copia al portapapeles. Si el navegador no lo permite en este momento (por
-// ejemplo porque estás en la ventana del juego y no en la página), se guarda
-// y se copia solo en cuanto vuelves a la página.
-async function copiarAlPortapapeles(texto, mensajeOk) {
+// Copia al portapapeles en silencio. Si el navegador no lo permite en este
+// momento (por ejemplo porque estás en la ventana del juego y no en la página),
+// se guarda y se copia solo en cuanto vuelves a la página.
+async function copiarAlPortapapeles(texto) {
   try {
     await navigator.clipboard.writeText(texto);
     copiaPendiente = null;
-    mostrarToast(mensajeOk, 5000);
   } catch {
-    copiaPendiente = { texto, mensaje: mensajeOk };
+    copiaPendiente = texto;
   }
 }
 
 ["focus", "click", "keydown", "pointerdown"].forEach((evento) =>
   window.addEventListener(evento, () => {
     if (!copiaPendiente) return;
-    const { texto, mensaje } = copiaPendiente;
+    const texto = copiaPendiente;
     copiaPendiente = null;
-    copiarAlPortapapeles(texto, mensaje);
+    copiarAlPortapapeles(texto);
   }, true)
 );
 
@@ -131,10 +130,7 @@ function copiarSmurfsRivalesAuto(match) {
     mostrarToast("Ningún rival tiene cuentas smurf con más ELO 1v1 que la cuenta con la que juega.", 5000);
     return;
   }
-  copiarAlPortapapeles(
-    r.texto,
-    `Copiado en el portapapeles: ${arreglarPlural(r.jugadores, "rival con cuentas smurf superiores", "rivales con cuentas smurf superiores")}. Ya puedes pegarlo en el chat del juego.`
-  );
+  copiarAlPortapapeles(r.texto);
 }
 
 // Lo llama la carga de datos (scriptCasterBuscar.js) cada vez que llegan cuentas
