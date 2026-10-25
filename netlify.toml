@@ -1,0 +1,7 @@
+# El sitio es estático: se publica la carpeta raíz tal cual, sin paso de compilación.
+[build]
+  publish = "."
+
+# Funciones sin servidor propio: registran las búsquedas y las muestran al administrador.
+[functions]
+  directory = "netlify/functions"

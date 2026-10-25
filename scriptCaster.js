@@ -1,5 +1,5 @@
 // =============================
-// Lógica de la sección: Dashboard para Casters
+// Lógica de la sección: Análisis de partida (dashboard)
 // =============================
 
 let dashboardData = null;
@@ -85,12 +85,11 @@ function initCasterSection() {
         </div>
       </div>
 
-      <div class="seg" role="group" aria-label="Tipo de ELO">
-        <button class="btn btn-elo" type="button" data-modo="1v1" aria-pressed="true">ELO 1v1</button>
-        <button class="btn btn-elo" type="button" data-modo="tg" aria-pressed="false">ELO TG</button>
+      <div class="seg" role="group" aria-label="Qué mostrar">
+        <button class="btn btn-modo" type="button" data-modo="1v1" aria-pressed="true">ELO 1v1</button>
+        <button class="btn btn-modo" type="button" data-modo="tg" aria-pressed="false">ELO TG</button>
+        <button class="btn btn-modo" type="button" data-modo="partidas" aria-pressed="false">Partidas</button>
       </div>
-
-      <button class="btn btn-ghost btn-ver-partidas" type="button">${icono("list", 18)}Ver partidas</button>
     </div>
     <div class="caster-root"></div>
   `;
@@ -500,8 +499,7 @@ function initCasterSection() {
 
   // ---- Listeners para los botones del encabezado ----
   const btnVolverBusqueda = casterSection.querySelector(".btn-volver-busqueda");
-  const btnVerPartidas = casterSection.querySelector(".btn-ver-partidas");
-  const btnsElo = casterSection.querySelectorAll(".btn-elo");
+  const btnsModo = casterSection.querySelectorAll(".btn-modo");
 
   // Volver a la pantalla de búsqueda, restaurando el último jugador buscado
   if (btnVolverBusqueda) {
@@ -512,85 +510,60 @@ function initCasterSection() {
     });
   }
 
-  // Toggle único: Ver partidas <-> Ver ELO
-  if (btnVerPartidas) {
-    // Determinar estado inicial leyendo si las columnas de partidas están ocultas
-    const inicialmentePartidasHeaders = root.querySelectorAll("th.col-group-partidas, td.col-group-partidas");
-    const partidasHiddenInitially = inicialmentePartidasHeaders.length ? inicialmentePartidasHeaders[0].classList.contains("hidden") : true;
-    // Si las columnas de partidas están ocultas => estamos mostrando ELO
-    let mostrandoELO = partidasHiddenInitially;
+  // Selector de 3 opciones: ELO 1v1 | ELO TG | Partidas.
+  // Las dos primeras comparten la misma barra (cambia el dato mostrado); la
+  // tercera cambia las columnas de ELO por las de partidas jugadas.
+  function actualizarColumnaElo(mostrando1v1) {
+    const rangoActivo = mostrando1v1 ? rango1v1 : rangoTG;
 
-    // Asegurar texto inicial del botón
-    const textoBtnPartidas = (txt) => { btnVerPartidas.innerHTML = `${icono("list", 18)}${txt}`; };
-    textoBtnPartidas(mostrandoELO ? "Ver partidas" : "Ver ELO's");
-
-    btnVerPartidas.addEventListener("click", (e) => {
-      e.stopPropagation();
-
-      const eloGroup = root.querySelectorAll("th.col-group-elo, td.col-group-elo");
-      const partidasGroup = root.querySelectorAll("th.col-group-partidas, td.col-group-partidas");
-
-      if (mostrandoELO) {
-        // Pasar a modo PARTIDAS
-        eloGroup.forEach(el => el.classList.add("hidden"));
-        partidasGroup.forEach(el => el.classList.remove("hidden"));
-        textoBtnPartidas("Ver ELO's");
-        mostrandoELO = false;
-      } else {
-        // Volver a modo ELO
-        partidasGroup.forEach(el => el.classList.add("hidden"));
-        eloGroup.forEach(el => el.classList.remove("hidden"));
-        textoBtnPartidas("Ver partidas");
-        mostrandoELO = true;
-      }
-      // El selector de ELO solo tiene sentido en la vista de ELO
-      btnsElo.forEach(b => { b.disabled = !mostrandoELO; });
+    root.querySelectorAll("td.col-elo-bar").forEach((td) => {
+      const profileId = Number(td.dataset.profileId);
+      const { l1, l2 } = obtenerLeaderboards(profileId);
+      const stat = mostrando1v1 ? l1 : l2;
+      const fill = td.querySelector(".elo-bar-fill");
+      const valor = td.querySelector(".elo-bar-value");
+      if (fill) fill.style.width = `${porcentajeEnRango(stat.rating, rangoActivo)}%`;
+      if (valor) valor.textContent = formatElo_Partidas(stat.rating);
     });
+
+    root.querySelectorAll("td.col-elo-max").forEach((td) => {
+      const profileId = Number(td.dataset.profileId);
+      const { l1, l2 } = obtenerLeaderboards(profileId);
+      const stat = mostrando1v1 ? l1 : l2;
+      const valor = td.querySelector(".elo-max-value");
+      if (valor) valor.textContent = formatElo_Partidas(stat.maxRating);
+    });
+
+    root.querySelectorAll(".elo-column-title").forEach((t) => {
+      t.textContent = mostrando1v1 ? "ELO 1v1" : "ELO TG";
+    });
+    actualizarPromedios(mostrando1v1);
   }
 
+  let modoActual = "1v1";
+  function aplicarModo(modo) {
+    modoActual = modo;
+    btnsModo.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.modo === modo)));
 
-  // Selector ELO 1v1 / ELO TG (misma barra, cambia el dato mostrado)
-  if (btnsElo.length) {
-    let mostrando1v1 = true;
+    const eloGroup = root.querySelectorAll("th.col-group-elo, td.col-group-elo");
+    const partidasGroup = root.querySelectorAll("th.col-group-partidas, td.col-group-partidas");
 
-    function actualizarColumnaElo() {
-      const rangoActivo = mostrando1v1 ? rango1v1 : rangoTG;
-
-      root.querySelectorAll("td.col-elo-bar").forEach((td) => {
-        const profileId = Number(td.dataset.profileId);
-        const { l1, l2 } = obtenerLeaderboards(profileId);
-        const stat = mostrando1v1 ? l1 : l2;
-        const fill = td.querySelector(".elo-bar-fill");
-        const valor = td.querySelector(".elo-bar-value");
-        if (fill) fill.style.width = `${porcentajeEnRango(stat.rating, rangoActivo)}%`;
-        if (valor) valor.textContent = formatElo_Partidas(stat.rating);
-      });
-
-      root.querySelectorAll("td.col-elo-max").forEach((td) => {
-        const profileId = Number(td.dataset.profileId);
-        const { l1, l2 } = obtenerLeaderboards(profileId);
-        const stat = mostrando1v1 ? l1 : l2;
-        const valor = td.querySelector(".elo-max-value");
-        if (valor) valor.textContent = formatElo_Partidas(stat.maxRating);
-      });
-
-      root.querySelectorAll(".elo-column-title").forEach((t) => {
-        t.textContent = mostrando1v1 ? "ELO 1v1" : "ELO TG";
-      });
-      actualizarPromedios(mostrando1v1);
+    if (modo === "partidas") {
+      eloGroup.forEach((el) => el.classList.add("hidden"));
+      partidasGroup.forEach((el) => el.classList.remove("hidden"));
+    } else {
+      partidasGroup.forEach((el) => el.classList.add("hidden"));
+      eloGroup.forEach((el) => el.classList.remove("hidden"));
+      actualizarColumnaElo(modo === "1v1");
     }
-
-    btnsElo.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const quiere1v1 = btn.dataset.modo === "1v1";
-        if (quiere1v1 === mostrando1v1) return;
-        mostrando1v1 = quiere1v1;
-        btnsElo.forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.modo === "1v1") === mostrando1v1)));
-        actualizarColumnaElo();
-      });
-    });
   }
+
+  btnsModo.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (btn.dataset.modo !== modoActual) aplicarModo(btn.dataset.modo);
+    });
+  });
 
 
   // Acción de cierre

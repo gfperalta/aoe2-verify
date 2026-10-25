@@ -1,5 +1,5 @@
 // =============================
-// Lógica de la sección: Dashboard para Casters (Buscar)
+// Lógica de la sección: Análisis de partida (búsqueda)
 // =============================
 
 let casterInput = null;
@@ -32,8 +32,8 @@ function initCasterBuscarSection() {
 
   section.innerHTML = `
     <div class="page-head">
-      <h2 class="page-title">Dashboard para Casters</h2>
-      <p class="page-sub">Busca a un jugador para ver su partida actual o la más reciente.</p>
+      <h2 class="page-title">Análisis de partida</h2>
+      <p class="page-sub">Busca a un jugador para conocer a sus rivales en su partida actual o en una anterior.</p>
     </div>
 
     <div class="caster-layout">
@@ -73,7 +73,7 @@ function initCasterBuscarSection() {
 
       <section class="caster-main">
         <div id="casterMatchesContainer" class="caster-matches-container" style="display:none;"></div>
-        <div class="caster-empty">Busca a un jugador para ver aquí su partida actual o la más reciente.</div>
+        <div class="caster-empty">Busca a un jugador para ver aquí su partida actual o las anteriores.</div>
       </section>
     </div>
   `;
@@ -343,9 +343,10 @@ function renderBusquedasRecientes(retardoEnVivoMs = 400) {
       <div class="sr-name">${escapeHtml(r.name)}</div>
       <button type="button" class="recent-delete-btn" title="Quitar del historial" aria-label="Quitar ${escapeHtml(r.name)} del historial">×</button>
     `;
-    row.addEventListener("click", () =>
-      seleccionarJugadorCaster(r.profileId, r.name)
-    );
+    row.addEventListener("click", () => {
+      registrarBusqueda(r.profileId, r.name);
+      seleccionarJugadorCaster(r.profileId, r.name);
+    });
     // El botón "×" elimina la entrada sin seleccionar al jugador
     row.querySelector(".recent-delete-btn").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -429,14 +430,34 @@ function renderCasterSearchResults(profiles) {
       </div>
       <div class="sr-right">ID ${p.profileId}</div>
     `;
-    row.addEventListener("click", () =>
-      seleccionarJugadorCaster(p.profileId, p.name)
-    );
+    row.addEventListener("click", () => {
+      registrarBusqueda(p.profileId, p.name);
+      seleccionarJugadorCaster(p.profileId, p.name);
+    });
     frag.appendChild(row);
   });
 
   casterResults.innerHTML = "";
   casterResults.appendChild(frag);
+}
+
+// =============================
+// Registro de búsquedas (para el panel oculto del administrador)
+// =============================
+// Se avisa a una función de Netlify qué jugador se eligió. Es "dispara y
+// olvida": si falla (sin internet, o probando en local) no afecta a la búsqueda.
+// El servidor guarda además el país de origen; no se envía ni se guarda la IP.
+function registrarBusqueda(profileId, nombre) {
+  try {
+    fetch("/api/registrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: String(profileId), nombre, herramienta: "caster" }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* sin registro */
+  }
 }
 
 // =============================

@@ -1,0 +1,8 @@
+{
+  "name": "aoe2-verify",
+  "private": true,
+  "description": "Sitio estático; solo las funciones de Netlify (registro de búsquedas) usan dependencias.",
+  "dependencies": {
+    "@netlify/blobs": "^8.2.0"
+  }
+}

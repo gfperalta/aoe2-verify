@@ -42,7 +42,7 @@ const navLinks = document.querySelectorAll('.nav a[data-section]');
 
 /**
  * Marca como activa la pestaña de la sección actual.
- * El dashboard de una partida ("caster") pertenece a la pestaña "Casters".
+ * El dashboard de una partida ("caster") pertenece a la pestaña "Análisis".
  */
 function marcarPestana(target) {
   const pestana = target === 'caster' ? 'casterBuscar' : target;
