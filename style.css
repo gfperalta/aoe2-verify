@@ -650,6 +650,7 @@ th.col-elo-max .elo-title { text-align: right; }
 .smurf-alerta-nombre { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .smurf-alerta-elo { font-family: var(--f-disp); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .smurf-none { color: var(--mu); font-size: 13px; }
+.smurf-buscando { color: var(--mu); font-size: 13px; animation: onda 1.4s infinite; }
 
 .dashboard-empty { padding: 40px; text-align: center; color: var(--mu); }
 

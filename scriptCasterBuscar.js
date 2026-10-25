@@ -631,150 +631,225 @@ async function obtenerPartidasCaster(profileId) {
 
 
 // =============================
-// Construir datos completos de una partida (jugadores reales + cuentas Smurf)
-// Reutilizable tanto por el botón "Ver dashboard" como por el monitoreo
-// automático del propio dashboard (ver scriptCaster.js).
+// Carga de los datos de una partida
 // =============================
-async function construirDatosCompletosPartida(match) {
+// Se hace en dos fases para que el dashboard abra rápido:
+//  1) Jugadores (perfil, ELO, estadísticas): una petición por jugador, todas a
+//     la vez (alrededor de 1 segundo).
+//  2) Cuentas smurf: se buscan en segundo plano y el dashboard las va mostrando
+//     a medida que llegan (ver alActualizarSmurfs en scriptCaster.js).
+// Cada perfil se pide una sola vez: lo que trae la fase 1 se reutiliza en la 2,
+// y las cuentas vinculadas se piden en paralelo, por niveles. Antes se pedía dos
+// veces a cada jugador y las vinculadas una tras otra, lo que además hacía
+// saltar el límite de peticiones de la API y obligaba a esperar reintentos.
+const API_AOE = "https://data.aoe2companion.com/api";
+const urlJugador = (id) =>
+  `${API_AOE}/profiles/${encodeURIComponent(id)}?language=es&extend=stats%2Cprofiles.avatar_medium_url%2Cprofiles.avatar_full_url&page=1`;
+const urlCuenta = (id) =>
+  `${API_AOE}/profiles/${encodeURIComponent(id)}?language=es&extend=stats&page=1`;
+
+// Limita cuántas peticiones van a la vez (la API corta si se piden demasiadas juntas)
+function crearLimitador(maximo) {
+  let activas = 0;
+  const cola = [];
+  const siguiente = () => {
+    if (activas >= maximo || !cola.length) return;
+    activas++;
+    const { tarea, resolver, rechazar } = cola.shift();
+    tarea().then(resolver, rechazar).finally(() => {
+      activas--;
+      siguiente();
+    });
+  };
+  return (tarea) =>
+    new Promise((resolver, rechazar) => {
+      cola.push({ tarea, resolver, rechazar });
+      siguiente();
+    });
+}
+
+function idsJugadoresDePartida(match) {
+  return (match?.teams || [])
+    .flatMap((team) => team?.players || [])
+    .map((player) => player?.profileId)
+    .filter(Boolean);
+}
+
+// Avisa al dashboard (si está abierto) que llegaron más datos de smurfs
+function avisarSmurfs(match) {
+  try {
+    if (typeof alActualizarSmurfs === "function") alActualizarSmurfs(match);
+  } catch (err) {
+    console.error("Error actualizando las cuentas smurf:", err);
+  }
+}
+
+// Fase 1: los jugadores de la partida. Devuelve los perfiles ya cargados.
+async function cargarJugadoresPartida(match) {
   if (!match?.teams || !Array.isArray(match.teams)) {
     throw new Error("La partida no tiene equipos o jugadores válidos.");
   }
 
-  // 1️⃣ Obtener jugadores reales (en paralelo; Promise.all conserva el orden)
-  const idsJugadores = match.teams
-    .flatMap((team) => team?.players || [])
-    .map((player) => player?.profileId)
-    .filter(Boolean);
-
-  const respuestasJugadores = await Promise.all(
-    idsJugadores.map(async (profileId) => {
-      const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(
-        profileId
-      )}?language=es&extend=stats%2Cprofiles.avatar_medium_url%2Cprofiles.avatar_full_url&page=1`;
+  const ids = idsJugadoresDePartida(match);
+  const perfiles = new Map();
+  const respuestas = await Promise.all(
+    ids.map(async (id) => {
       try {
-        return await fetchJsonApi(url);
+        const datos = await fetchJsonApi(urlJugador(id));
+        perfiles.set(String(id), datos);
+        return datos;
       } catch (err) {
-        console.error("Error obteniendo jugador real:", profileId, err);
+        console.error("Error obteniendo jugador real:", id, err);
         return null;
       }
     })
   );
-  const jugadoresReales = respuestasJugadores.filter(Boolean);
-  if (jugadoresReales.length < idsJugadores.length) {
+
+  const jugadoresReales = respuestas.filter(Boolean);
+  if (jugadoresReales.length < ids.length) {
     // Mejor avisar que abrir un dashboard con jugadores faltantes
     throw new Error("No se pudieron cargar todos los jugadores de la partida.");
   }
 
-  // 2️⃣ Obtener cuentas Smurf (en paralelo)
-  async function obtenerSmurfsParaJugador(profileId) {
-    const matriz = [];
-    const visitados = new Set();
+  match.jugadoresReales = jugadoresReales;
+  match.Smurf = [];
+  match.smurfPendiente = true; // el dashboard muestra "Buscando…" hasta que llegan
+  return perfiles;
+}
 
-    async function obtenerData(pid) {
-      const url = `https://data.aoe2companion.com/api/profiles/${encodeURIComponent(pid)}?language=es&extend=stats&page=1`;
+function filaCuenta(datos, pid, padre, n) {
+  const lb1v1 = datos.leaderboards?.find((l) => l.leaderboardId === "rm_1v1") || {};
+  const lbTG = datos.leaderboards?.find((l) => l.leaderboardId === "rm_team") || {};
+  return {
+    n,
+    padre: padre || datos.name || "Principal",
+    nombre: datos.name || "Desconocido",
+    pais: datos.countryName || "",
+    id: pid,
+    elo1v1: lb1v1.rating ?? 0,
+    max1v1: lb1v1.maxRating ?? 0,
+    juegos1v1: lb1v1.games ?? 0,
+    eloTG: lbTG.rating ?? 0,
+    maxTG: lbTG.maxRating ?? 0,
+    juegosTG: lbTG.games ?? 0,
+  };
+}
+
+// Fase 2: cuentas smurf de todos los jugadores, en segundo plano.
+// match.Smurf se va llenando (un jugador a la vez) y match.smurfPendiente pasa a
+// false al terminar. Si ya hay una búsqueda en marcha para esta partida, la reutiliza.
+const smurfsEnCurso = new Map(); // matchId -> promesa
+
+function cargarSmurfsPartida(match, perfiles = new Map()) {
+  if (smurfsEnCurso.has(match.matchId)) return smurfsEnCurso.get(match.matchId);
+  if (!Array.isArray(match.Smurf)) match.Smurf = [];
+
+  const promesa = (async () => {
+    const limitar = crearLimitador(6);
+
+    const obtener = async (pid) => {
+      if (perfiles.has(pid)) return perfiles.get(pid);
       try {
-        return await fetchJsonApi(url);
+        const datos = await limitar(() => fetchJsonApi(urlCuenta(pid)));
+        perfiles.set(pid, datos);
+        return datos;
       } catch {
         return null;
       }
-    }
+    };
 
-    async function procesarCuenta(pid, padre = null) {
-      pid = String(pid).trim();
-      if (!pid || visitados.has(pid)) return;
-      visitados.add(pid);
+    const vinculadas = (datos) =>
+      (datos?.linkedProfiles || datos?.params?.linkedProfiles || [])
+        .map((l) => String(l?.profileId ?? l?.id ?? "").trim())
+        .filter(Boolean);
 
-      const dataCuenta = await obtenerData(pid);
-      if (!dataCuenta) return;
-
-      const lb1v1 = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_1v1") || {};
-      const lbTG = dataCuenta.leaderboards?.find(l => l.leaderboardId === "rm_team") || {};
-
-      const fila = {
-        n: matriz.length + 1,
-        padre: padre || dataCuenta.name || "Principal",
-        nombre: dataCuenta.name || "Desconocido",
-        pais: dataCuenta.countryName || "",
-        id: pid,
-        elo1v1: lb1v1.rating ?? 0,
-        max1v1: lb1v1.maxRating ?? 0,
-        juegos1v1: lb1v1.games ?? 0,
-        eloTG: lbTG.rating ?? 0,
-        maxTG: lbTG.maxRating ?? 0,
-        juegosTG: lbTG.games ?? 0,
-      };
-
-      matriz.push(fila);
-
-      const linkedProfiles = dataCuenta.linkedProfiles || dataCuenta.params?.linkedProfiles || [];
-      if (Array.isArray(linkedProfiles) && linkedProfiles.length > 0) {
-        for (const linked of linkedProfiles) {
-          const hijoId = linked?.profileId ?? linked?.id ?? null;
-          if (hijoId) await procesarCuenta(hijoId, dataCuenta.name);
-        }
+    // La cuenta del jugador y todas las vinculadas, nivel por nivel (cada nivel en paralelo)
+    async function familia(raiz) {
+      const matriz = [];
+      const visitados = new Set([String(raiz)]);
+      let nivel = [{ pid: String(raiz), padre: null }];
+      while (nivel.length) {
+        const datos = await Promise.all(nivel.map(({ pid }) => obtener(pid)));
+        const siguiente = [];
+        datos.forEach((d, i) => {
+          if (!d) return;
+          matriz.push(filaCuenta(d, nivel[i].pid, nivel[i].padre, matriz.length + 1));
+          for (const hijo of vinculadas(d)) {
+            if (!visitados.has(hijo)) {
+              visitados.add(hijo);
+              siguiente.push({ pid: hijo, padre: d.name });
+            }
+          }
+        });
+        nivel = siguiente;
       }
+      return matriz;
     }
 
-    await procesarCuenta(profileId);
-    return matriz;
-  }
+    const hechos = new Set(match.Smurf.map((s) => String(s.jugadorId)));
+    const pendientes = idsJugadoresDePartida(match).filter((id) => !hechos.has(String(id)));
 
-  const smurfPromises = [];
-  for (const team of match.teams) {
-    if (!team?.players) continue;
+    await Promise.all(
+      pendientes.map(async (id) => {
+        let cuentas = [];
+        try {
+          cuentas = await familia(id);
+        } catch (err) {
+          console.error("Error buscando cuentas smurf de", id, err);
+        }
+        match.Smurf.push({ jugadorId: id, cuentas });
+        avisarSmurfs(match); // este jugador ya se puede mostrar
+      })
+    );
+  })()
+    .catch((err) => console.error("Error buscando cuentas smurf:", err))
+    .finally(() => {
+      match.smurfPendiente = false;
+      smurfsEnCurso.delete(match.matchId);
+      try {
+        if (window.dashboardData === match) sessionStorage.setItem("dashboardData", JSON.stringify(match));
+      } catch {
+        /* sin sessionStorage */
+      }
+      avisarSmurfs(match); // terminó: el dashboard copia el texto de los rivales
+    });
 
-    for (const player of team.players) {
-      const pid = player?.profileId;
-      if (!pid) continue;
-
-      smurfPromises.push(
-        obtenerSmurfsParaJugador(pid).then(cuentas => ({
-          jugadorId: pid,
-          cuentas
-        }))
-      );
-    }
-  }
-
-  const smurfData = await Promise.all(smurfPromises);
-
-  // 3️⃣ Guardar en el objeto match
-  match.jugadoresReales = jugadoresReales;
-  match.Smurf = smurfData;
-
-  console.log("✅ jugadoresReales:", jugadoresReales);
-  console.log("✅ Smurf:", smurfData);
-
-  return match;
+  smurfsEnCurso.set(match.matchId, promesa);
+  return promesa;
 }
 
 // =============================
 // Abrir el dashboard de una partida
 // =============================
-// Los datos completos se pueden empezar a cargar antes (precarga) mientras el
-// aviso de "partida nueva" cuenta hacia atrás; así, al abrir ya están listos.
+// La carga puede empezar antes (precarga) mientras el aviso de "partida nueva"
+// cuenta hacia atrás; así, al abrir ya está lista o casi.
 const PRECARGA_VIGENCIA_MS = 60000; // pasado este tiempo se vuelve a cargar
-let dashboardPrecarga = null;       // { matchId, promesa, desde }
+let cargaPartida = null;            // { matchId, desde, fase1 }
 let cargandoDashboard = false;      // evita lanzar la carga dos veces con doble clic
 
-function obtenerDatosDashboard(match) {
-  const p = dashboardPrecarga;
-  if (p && p.matchId === match.matchId && Date.now() - p.desde < PRECARGA_VIGENCIA_MS) {
-    return p.promesa;
-  }
-  const promesa = construirDatosCompletosPartida(match);
-  const nueva = { matchId: match.matchId, promesa, desde: Date.now() };
-  dashboardPrecarga = nueva;
+// Empieza (o reutiliza) la carga de una partida. fase1 se resuelve con los
+// jugadores cargados; las cuentas smurf siguen buscándose en segundo plano.
+function iniciarCargaPartida(match) {
+  const c = cargaPartida;
+  if (c && c.matchId === match.matchId && Date.now() - c.desde < PRECARGA_VIGENCIA_MS) return c;
+
+  const nueva = { matchId: match.matchId, desde: Date.now() };
+  nueva.fase1 = (async () => {
+    const perfiles = await cargarJugadoresPartida(match);
+    cargarSmurfsPartida(match, perfiles); // en segundo plano: no se espera
+    return match;
+  })();
   // Si falla, se descarta para que el siguiente intento cargue de nuevo
-  promesa.catch(() => {
-    if (dashboardPrecarga === nueva) dashboardPrecarga = null;
+  nueva.fase1.catch(() => {
+    if (cargaPartida === nueva) cargaPartida = null;
   });
-  return promesa;
+  cargaPartida = nueva;
+  return nueva;
 }
 
 function precargarDashboard(match) {
   if ((match?.teams || []).length > 2) return; // esas partidas no abren dashboard
-  obtenerDatosDashboard(match).catch(() => {}); // el error se muestra al abrirlo
+  iniciarCargaPartida(match).fase1.catch(() => {}); // el error se muestra al abrirlo
 }
 
 async function abrirDashboard(match) {
@@ -795,9 +870,10 @@ async function abrirDashboard(match) {
   loader.classList.add("active"); // ventana de carga con spinner
 
   try {
-    const matchCompleto = await obtenerDatosDashboard(match);
+    // Solo se espera a los jugadores: las cuentas smurf llegan después
+    const matchCompleto = await iniciarCargaPartida(match).fase1;
 
-    // 🔹 Guardamos el match completo (con jugadoresReales y Smurf) en memoria global
+    // 🔹 Guardamos el match (con jugadoresReales) en memoria global
     window.dashboardData = matchCompleto;
 
     // 🔹 También lo guardamos en sessionStorage por si recargas la página
@@ -1253,7 +1329,7 @@ function showNewMatchToast(dashboardButton) {
   cancelBtn.addEventListener("click", () => {
     clearInterval(toastTimer);
     overlay.remove();
-    dashboardPrecarga = null; // se canceló: se descarta lo precargado
+    cargaPartida = null; // se canceló: se descarta lo precargado
   });
 
   toast.appendChild(cancelBtn);
