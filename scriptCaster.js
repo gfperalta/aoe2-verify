@@ -47,6 +47,52 @@ function analizarCuentasSmurf(smurfData) {
 }
 
 // ==================================================
+// Texto para pegar en el chat del juego: cuentas smurf superiores de los rivales
+// ==================================================
+// Para el equipo contrario al del jugador buscado, se toma a cada jugador que
+// tenga cuentas smurf con más ELO 1v1 que la cuenta con la que está jugando y
+// se arma, por jugador:
+//   * <cuenta actual> tiene N cuentas smurf
+//   * <smurf> <ELO>            (solo las que superan a la cuenta actual)
+// Entre un jugador y otro va una línea en blanco. El "* " del inicio de cada
+// línea hace que el chat del juego envíe el mensaje a todos.
+function arreglarPlural(n, singular, plural) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+function textoSmurfsRivales(datos) {
+  const buscadoId = typeof lastCasterSearch !== "undefined" ? lastCasterSearch?.profileId : null;
+  const equipos = datos?.teams || [];
+  const miEquipo = equipos.findIndex((t) => (t?.players || []).some((p) => String(p.profileId) === String(buscadoId)));
+  if (miEquipo < 0) return { error: "No se encontró al jugador buscado en esta partida." };
+
+  const rivales = equipos.filter((_, i) => i !== miEquipo).flatMap((t) => t?.players || []);
+  const bloques = [];
+
+  for (const jugador of rivales) {
+    const smurfData = (datos.Smurf || []).find((x) => x.jugadorId === jugador.profileId);
+    const cuentas = smurfData?.cuentas;
+    if (!Array.isArray(cuentas) || cuentas.length <= 1) continue;
+
+    const [actual, ...otras] = cuentas;
+    const eloActual = Number(actual?.elo1v1) || 0;
+    const superiores = otras
+      .filter((c) => (Number(c?.elo1v1) || 0) > eloActual)
+      .sort((a, b) => (Number(b.elo1v1) || 0) - (Number(a.elo1v1) || 0));
+    if (!superiores.length) continue;
+
+    const nombre = jugador.name || actual?.nombre || "Jugador";
+    const lineas = [
+      `${nombre} tiene ${arreglarPlural(otras.length, "cuenta smurf", "cuentas smurf")}`,
+      ...superiores.map((c) => `${c.nombre || "Desconocido"} ${c.elo1v1}`),
+    ];
+    bloques.push(lineas.map((l) => `* ${l}`).join("\n"));
+  }
+
+  return { texto: bloques.join("\n\n"), jugadores: bloques.length };
+}
+
+// ==================================================
 // Inicializar la sección principal del dashboard
 // ==================================================
 function initCasterSection() {
@@ -90,6 +136,8 @@ function initCasterSection() {
         <button class="btn btn-modo" type="button" data-modo="tg" aria-pressed="false">ELO TG</button>
         <button class="btn btn-modo" type="button" data-modo="partidas" aria-pressed="false">Partidas</button>
       </div>
+
+      <button class="btn btn-ghost btn-copiar-smurfs" type="button" title="Copia al portapapeles las cuentas smurf con más ELO 1v1 de los rivales, listas para pegar en el chat del juego">${icono("copy", 18)}Copiar smurfs rivales</button>
     </div>
     <div class="caster-root"></div>
   `;
@@ -500,6 +548,24 @@ function initCasterSection() {
   // ---- Listeners para los botones del encabezado ----
   const btnVolverBusqueda = casterSection.querySelector(".btn-volver-busqueda");
   const btnsModo = casterSection.querySelectorAll(".btn-modo");
+  const btnCopiarSmurfs = casterSection.querySelector(".btn-copiar-smurfs");
+
+  // Copia de una vez las cuentas smurf superiores de todos los rivales
+  if (btnCopiarSmurfs) {
+    btnCopiarSmurfs.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const r = textoSmurfsRivales(dashboardData);
+      if (r.error) return mostrarToast(r.error);
+      if (!r.jugadores) return mostrarToast("Ningún rival tiene cuentas smurf con más ELO 1v1 que la cuenta con la que juega.", 5000);
+      try {
+        await navigator.clipboard.writeText(r.texto);
+        mostrarToast(`Copiado: ${arreglarPlural(r.jugadores, "rival con cuentas smurf superiores", "rivales con cuentas smurf superiores")}. Ya puedes pegarlo en el chat del juego.`, 5000);
+      } catch (err) {
+        console.error("Error al copiar:", err);
+        mostrarToast("No se pudo copiar al portapapeles.");
+      }
+    });
+  }
 
   // Volver a la pantalla de búsqueda, restaurando el último jugador buscado
   if (btnVolverBusqueda) {
